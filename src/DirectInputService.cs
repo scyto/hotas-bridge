@@ -24,7 +24,7 @@ public sealed class LiveDevice : IDisposable
 
     public LiveDevice(IDirectInput8 di, DeviceInstance inst, IntPtr hwnd)
     {
-        Info = new DeviceInfo(inst.InstanceGuid, inst.ProductGuid, inst.ProductName.Trim(), inst.InstanceName.Trim());
+        Info = new DeviceInfo(inst.InstanceGuid, inst.ProductGuid, inst.ProductName.Trim(), inst.InstanceName.Trim(), inst.Type.ToString());
         _dev = di.CreateDevice(inst.InstanceGuid);
         _dev.SetCooperativeLevel(hwnd, CooperativeLevel.NonExclusive | CooperativeLevel.Background);
         _dev.SetDataFormat<RawJoystickState>();

@@ -8,7 +8,7 @@ public static class Presets
     // DirectInput product GUIDs: {PIDVID-0000-0000-0000-504944564944}
     public static readonly Guid FlightdeckStick = new("708410F5-0000-0000-0000-504944564944");
     public static readonly Guid FlightdeckThrottle = new("708510F5-0000-0000-0000-504944564944");
-    public static readonly Guid VelocityOneRudder = new("701210F5-0000-0000-0000-504944564944");
+    public static readonly Guid VelocityOneRudder = new("701210F5-0000-0000-0000-504944564944"); // DirectInput type Gamepad: AC7 ignores it
 
     static InputRef B(int n) => new(InputKind.Button, n - 1);
     static InputRef A(int i, bool inv = false) => new(InputKind.Axis, i, '\0', inv);
@@ -20,6 +20,7 @@ public static class Presets
         new Preset("Flightdeck Stick – AC7 default", "ac7", FlightdeckStick, "Flightdeck Stick", new Dictionary<string, InputRef>
         {
             ["Flight_Pitch"] = A(1, true), ["Flight_Roll"] = A(0),
+            ["Flight_Yaw"] = A(2),                // stick twist; AC7 ignores the VelocityOne Rudder (it reports as a gamepad)
             ["Flight_Gun"] = B(28),               // trigger stage 1
             ["Flight_Missile"] = B(1),            // FIRE touch pad push
             ["Flight_Weapon"] = B(9),             // shaft button
@@ -36,10 +37,6 @@ public static class Presets
             ["UI_Menu"] = B(22),
             ["UI_LeftStickUp"] = H(1, 'U'), ["UI_LeftStickDown"] = H(1, 'D'),
             ["UI_LeftStickLeft"] = H(1, 'L'), ["UI_LeftStickRight"] = H(1, 'R'),
-        }),
-        new Preset("VelocityOne Rudder – yaw", "ac7", VelocityOneRudder, "VelocityOne Rudder", new Dictionary<string, InputRef>
-        {
-            ["Flight_Yaw"] = A(2),
         }),
     };
 }

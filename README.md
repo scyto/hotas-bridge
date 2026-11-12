@@ -18,5 +18,6 @@ Implement `IGameAdapter` (config path, action list, input syntax, install, backu
 
 ## AC7 notes
 - AC7 reads Button1–32 and 4 hats. The app refuses anything outside that range.
-- AC7 doesn't write sections for every device it sees, such as the VelocityOne Rudder. The app creates the missing section from the DirectInput product GUID (`Joystick-{PIDVID-0000-0000-0000-504944564944}`).
+- AC7 only reads devices that Windows reports as a joystick, flight stick or 1st-person controller. Devices that report as a **gamepad** are ignored, and that includes the **VelocityOne Rudder**. The app marks these devices and won't bind them. The Flightdeck Stick preset puts yaw on stick twist instead.
+- AC7 doesn't write a section for every joystick it reads. For those, the app creates the section from the DirectInput product GUID (`Joystick-{PIDVID-0000-0000-0000-504944564944}`).
 - Turn off Steam Input for AC7.

@@ -121,6 +121,7 @@ sealed class MainForm : Form
             }
             _profile.Bindings.TryGetValue(a.Key, out var b);
             string inputText = b == null ? "" : (b.Raw ?? (b.Input != null ? _adapter.Format(b.Input) ?? "(unsupported)" : ""));
+            if (b != null && _adapter.UnsupportedDevice(b.DeviceType, b.DeviceName) != null) inputText = "(device ignored by game) " + inputText;
             bool listening = _listenKey == a.Key;
             int r = _grid.Rows.Add(a.Key, a.Description + (a.Kind == ActionKind.Axis ? "  ·axis" : ""), b?.DeviceName ?? "",
                 listening ? "waiting for input…" : inputText, listening ? "Press…" : "Detect", a.Kind == ActionKind.Axis ? "⇅" : "", "×");
@@ -208,10 +209,10 @@ sealed class MainForm : Form
 
     bool Bind(LiveDevice d, InputRef input)
     {
-        var why = _adapter.Unsupported(input);
+        var why = _adapter.UnsupportedDevice(d.Info.DeviceType, d.Info.ProductName) ?? _adapter.Unsupported(input);
         if (why != null) { SetStatus(why + " Try another control.", true); return false; }
         var key = _listenKey!; _listenKey = null;
-        _profile.Bindings[key] = new Binding { DeviceProduct = d.Info.ProductGuid, DeviceName = d.Info.ProductName, Input = input };
+        _profile.Bindings[key] = new Binding { DeviceProduct = d.Info.ProductGuid, DeviceName = d.Info.ProductName, DeviceType = d.Info.DeviceType, Input = input };
         SaveProfile(); RefreshGrid();
         SetStatus($"{key} = {_adapter.Format(input)} on {d.Info.ProductName}");
         return true;
@@ -230,7 +231,8 @@ sealed class MainForm : Form
             foreach (var d in _di.Devices)
             {
                 var v = new DeviceView(d) { Width = _devices.ClientSize.Width - 24 };
-                if (!known.ContainsKey(d.Info.ProductGuid)) v.Note = "Not in the game's config yet. A section will be created on install.";
+                if (_adapter.UnsupportedDevice(d.Info.DeviceType, d.Info.ProductName) != null) v.Note = $"Ignored by the game: Windows reports it as a {d.Info.DeviceType}.";
+                else if (!known.ContainsKey(d.Info.ProductGuid)) v.Note = "Not in the game's config yet. A section will be created on install.";
                 _devices.Controls.Add(v);
             }
         }
@@ -251,6 +253,9 @@ sealed class MainForm : Form
     void LoadGame()
     {
         _profile = ProfileStore.Load(_adapter.Id);
+        // older profiles have no device type: fill it in from whatever is plugged in now
+        foreach (var b in _profile.Bindings.Values.Where(b => b.DeviceType == null))
+            b.DeviceType = _di?.Devices.FirstOrDefault(d => d.Info.ProductGuid == b.DeviceProduct)?.Info.DeviceType;
         _path.Text = _adapter.ConfigPath + (File.Exists(_adapter.ConfigPath) ? "" : "   (not found: run the game once with your devices connected)");
         RefreshGrid(); RebuildDevices();
         SetStatus($"{_adapter.Name}: {_profile.Bindings.Count} bindings loaded.");
@@ -268,7 +273,7 @@ sealed class MainForm : Form
             item.Click += (_, _) =>
             {
                 foreach (var (k, v) in p.Map)
-                    _profile.Bindings[k] = new Binding { DeviceProduct = p.DeviceProduct, DeviceName = connected?.Info.ProductName ?? p.DeviceName, Input = v };
+                    _profile.Bindings[k] = new Binding { DeviceProduct = p.DeviceProduct, DeviceName = connected?.Info.ProductName ?? p.DeviceName, DeviceType = connected?.Info.DeviceType, Input = v };
                 SaveProfile(); RefreshGrid();
                 SetStatus($"Loaded preset '{p.Name}' ({p.Map.Count} bindings).");
             };
@@ -304,7 +309,9 @@ sealed class MainForm : Form
         try
         {
             var backup = _adapter.Install(_profile);
-            SetStatus($"Installed {_profile.Bindings.Count} bindings. " + (backup.Length > 0 ? $"Backup: {Path.GetFileName(backup)}" : "(no previous file to back up)"));
+            var ignored = _profile.Bindings.Values.Where(b => _adapter.UnsupportedDevice(b.DeviceType, b.DeviceName) != null).ToList();
+            var skipped = ignored.Count == 0 ? "" : $"Skipped {ignored.Count} on {string.Join(", ", ignored.Select(b => b.DeviceName).Distinct())} (the game ignores it). ";
+            SetStatus($"Installed {_profile.Bindings.Count - ignored.Count} bindings. " + skipped + (backup.Length > 0 ? $"Backup: {Path.GetFileName(backup)}" : "(no previous file to back up)"));
             RebuildDevices();
         }
         catch (Exception ex) { SetStatus("Install failed: " + ex.Message, true); }

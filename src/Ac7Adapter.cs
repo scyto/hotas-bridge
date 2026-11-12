@@ -7,6 +7,9 @@ namespace HotasBridge;
 /// Sections are [Joystick-{DirectInput product GUID}] with ProductName=..., bindings like Flight_Gun=Button1.
 /// Supports X Y Z Rx Ry Rz Slider1-2, POV_[UDLR]1-4, Button1-32, modifiers :P :N :R :C.
 /// AC7 does not write a section for every device it sees, so we create missing ones from the product GUID.
+/// AC7 only enumerates DirectInput devices of type Joystick, Flight and 1stPerson (the EnableDevice* switches in
+/// [JoystickSetting]); there is no gamepad switch. Devices that report as Gamepad, such as the VelocityOne Rudder,
+/// are ignored, so a section written for them never takes effect.
 /// </summary>
 public sealed class Ac7Adapter : IGameAdapter
 {
@@ -58,6 +61,12 @@ public sealed class Ac7Adapter : IGameAdapter
         InputKind.Pov when i.Index >= 4 => "AC7 only reads 4 hats.",
         _ => null
     };
+
+    static readonly HashSet<string> ReadTypes = new(StringComparer.OrdinalIgnoreCase) { "Joystick", "Flight", "FirstPerson" };
+
+    public string? UnsupportedDevice(string? deviceType, string deviceName) =>
+        deviceType == null || ReadTypes.Contains(deviceType) ? null :
+        $"AC7 ignores {deviceName}: Windows reports it as a {deviceType} device, and AC7 only reads joystick, flight and 1st-person devices.";
 
     public string? Format(InputRef i)
     {
@@ -121,6 +130,7 @@ public sealed class Ac7Adapter : IGameAdapter
         // group bindings per device
         var byDev = profile.Bindings
             .Where(kv => kv.Value.DeviceProduct != Guid.Empty && (kv.Value.Raw != null || kv.Value.Input != null))
+            .Where(kv => UnsupportedDevice(kv.Value.DeviceType, kv.Value.DeviceName) == null) // AC7 would never read them
             .GroupBy(kv => kv.Value.DeviceProduct);
 
         // strip every managed key from every joystick section first, so moving an action between devices leaves no duplicate

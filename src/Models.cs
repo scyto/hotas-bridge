@@ -20,8 +20,8 @@ public sealed record InputRef(InputKind Kind, int Index, char Direction = '\0', 
     };
 }
 
-/// <summary>A device as DirectInput sees it.</summary>
-public sealed record DeviceInfo(Guid InstanceGuid, Guid ProductGuid, string ProductName, string InstanceName)
+/// <summary>A device as DirectInput sees it. DeviceType is the DirectInput type name (Joystick, Gamepad, Flight, FirstPerson, ...).</summary>
+public sealed record DeviceInfo(Guid InstanceGuid, Guid ProductGuid, string ProductName, string InstanceName, string DeviceType)
 {
     public ushort Vid => (ushort)(BitConverter.ToUInt32(ProductGuid.ToByteArray(), 0) & 0xFFFF);
     public ushort Pid => (ushort)(BitConverter.ToUInt32(ProductGuid.ToByteArray(), 0) >> 16);
@@ -33,6 +33,8 @@ public sealed class Binding
 {
     public Guid DeviceProduct { get; set; }
     public string DeviceName { get; set; } = "";
+    /// <summary>DirectInput device type when bound (e.g. "Gamepad"); some games ignore whole device types.</summary>
+    public string? DeviceType { get; set; }
     public InputRef? Input { get; set; }
     /// <summary>Optional raw override in the game's own syntax (e.g. "Rx:R + Ry:R").</summary>
     public string? Raw { get; set; }
