@@ -47,6 +47,9 @@ public sealed class LiveDevice : IDisposable
         }
     }
 
+    /// <summary>No axes, buttons or hats: nothing a game could bind.</summary>
+    public bool IsEmpty => State.ButtonCount == 0 && State.PovCount == 0 && !State.AxisPresent.Any(a => a);
+
     static float Norm(int v) => Math.Clamp(v / 32767.5f - 1f, -1f, 1f); // DI default range 0..65535
 
     public void Poll()
@@ -88,7 +91,14 @@ public sealed class DirectInputService : IDisposable
         Devices.Clear();
         foreach (var inst in _di.GetDevices(DeviceClass.GameControl, DeviceEnumerationFlags.AttachedOnly))
         {
-            try { Devices.Add(new LiveDevice(_di, inst, _hwnd)); } catch { /* skip devices that refuse */ }
+            try
+            {
+                var d = new LiveDevice(_di, inst, _hwnd);
+                // composite devices can expose a vendor-only interface with no controls (the rudder's does once it
+                // reports as Flight); it shares the product GUID, so it would only confuse the list
+                if (d.IsEmpty) d.Dispose(); else Devices.Add(d);
+            }
+            catch { /* skip devices that refuse */ }
         }
     }
 
