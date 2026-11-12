@@ -106,13 +106,18 @@ sealed class MainForm : Form
         g.ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle { BackColor = Theme.Panel2, ForeColor = Theme.Amber, Font = Theme.UiBold, SelectionBackColor = Theme.Panel2 };
         g.DefaultCellStyle = new DataGridViewCellStyle { BackColor = Theme.Panel, ForeColor = Theme.Text, SelectionBackColor = Color.FromArgb(60, 45, 20), SelectionForeColor = Theme.Text, Font = Theme.Ui };
         g.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill; // row heights: ApplyGridMetrics
-        g.Columns.Add(new DataGridViewTextBoxColumn { Name = "Action", HeaderText = "Action", ReadOnly = true, FillWeight = 26, DefaultCellStyle = { Font = Theme.Mono } });
+        g.Columns.Add(new DataGridViewTextBoxColumn { Name = "Action", HeaderText = "Action", ReadOnly = true, FillWeight = 24, DefaultCellStyle = { Font = Theme.Mono } });
         g.Columns.Add(new DataGridViewTextBoxColumn { Name = "Desc", HeaderText = "What it does", ReadOnly = true, FillWeight = 22, DefaultCellStyle = { ForeColor = Theme.Dim } });
         g.Columns.Add(new DataGridViewTextBoxColumn { Name = "Device", HeaderText = "Device", ReadOnly = true, FillWeight = 20 });
         g.Columns.Add(new DataGridViewTextBoxColumn { Name = "Input", HeaderText = "Binding (editable)", FillWeight = 18, DefaultCellStyle = { Font = Theme.Mono } });
-        g.Columns.Add(new DataGridViewButtonColumn { Name = "Detect", HeaderText = "", Text = "Detect", UseColumnTextForButtonValue = false, FillWeight = 9, FlatStyle = FlatStyle.Flat });
-        g.Columns.Add(new DataGridViewButtonColumn { Name = "Inv", HeaderText = "", FillWeight = 5, FlatStyle = FlatStyle.Flat });
-        g.Columns.Add(new DataGridViewButtonColumn { Name = "Clear", HeaderText = "", Text = "×", UseColumnTextForButtonValue = true, FillWeight = 4, FlatStyle = FlatStyle.Flat });
+        g.Columns.Add(new DataGridViewButtonColumn { Name = "Detect", HeaderText = "Detect", ToolTipText = "Click, then press a button, push a hat or move an axis to bind it", UseColumnTextForButtonValue = false, FillWeight = 9, FlatStyle = FlatStyle.Flat });
+        g.Columns.Add(new DataGridViewButtonColumn { Name = "Inv", HeaderText = "Invert", ToolTipText = "Flip an axis's direction (AC7 writes it as :R)", FillWeight = 7, FlatStyle = FlatStyle.Flat });
+        g.Columns.Add(new DataGridViewButtonColumn { Name = "Clear", HeaderText = "Clear", ToolTipText = "Remove the binding", FillWeight = 6, FlatStyle = FlatStyle.Flat });
+        foreach (var name in new[] { "Detect", "Inv", "Clear" })
+        {
+            g.Columns[name].HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleCenter;
+            g.Columns[name].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+        }
         g.CellContentClick += Grid_CellContentClick;
         g.CellEndEdit += Grid_CellEndEdit;
     }
@@ -123,6 +128,8 @@ sealed class MainForm : Form
         _grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
         _grid.ColumnHeadersHeight = Math.Max(LogicalToDeviceUnits(30), TextRenderer.MeasureText("Ag", Theme.UiBold).Height + LogicalToDeviceUnits(10));
         _grid.RowTemplate.Height = Math.Max(LogicalToDeviceUnits(28), TextRenderer.MeasureText("Ag", Theme.Ui).Height + LogicalToDeviceUnits(10));
+        foreach (var name in new[] { "Detect", "Inv", "Clear" }) // narrow columns: never cut off their heading
+            _grid.Columns[name].MinimumWidth = TextRenderer.MeasureText(_grid.Columns[name].HeaderText, Theme.UiBold).Width + LogicalToDeviceUnits(18);
     }
 
     int CardWidth => _devices.ClientSize.Width - _devices.Padding.Horizontal;
@@ -145,10 +152,20 @@ sealed class MainForm : Form
             string inputText = b == null ? "" : (b.Raw ?? (b.Input != null ? _adapter.Format(b.Input) ?? "(unsupported)" : ""));
             if (b != null && _adapter.UnsupportedDevice(b.DeviceType, b.DeviceName) != null) inputText = "(device ignored by game) " + inputText;
             bool listening = _listenKey == a.Key;
+            bool inverted = b?.Raw == null && b?.Input is { Kind: InputKind.Axis, Invert: true };
             int r = _grid.Rows.Add(a.Key, a.Description + (a.Kind == ActionKind.Axis ? "  ·axis" : ""), b?.DeviceName ?? "",
-                listening ? "waiting for input…" : inputText, listening ? "Press…" : "Detect", a.Kind == ActionKind.Axis ? "⇅" : "", "×");
-            _grid.Rows[r].Tag = a;
-            if (listening) _grid.Rows[r].DefaultCellStyle.BackColor = Color.FromArgb(60, 42, 12);
+                listening ? "waiting for input…" : inputText, listening ? "Press…" : "Detect", inverted ? "⇅ on" : "⇅", "×");
+            var gr = _grid.Rows[r];
+            gr.Tag = a;
+            if (listening) gr.DefaultCellStyle.BackColor = Color.FromArgb(60, 42, 12);
+            if (a.Kind != ActionKind.Axis) gr.Cells["Inv"] = new DataGridViewTextBoxCell { Value = "" }; // only axes can be inverted
+            else
+            {
+                var inv = gr.Cells["Inv"];
+                inv.ToolTipText = inverted ? "Inverted. Click to restore the normal direction." : "Click to flip this axis's direction.";
+                if (inverted) inv.Style = new DataGridViewCellStyle(inv.InheritedStyle) { ForeColor = Theme.Amber, Font = Theme.UiBold };
+            }
+            if (b == null) gr.Cells["Clear"] = new DataGridViewTextBoxCell { Value = "" }; // nothing to clear
         }
     }
 
@@ -166,6 +183,7 @@ sealed class MainForm : Form
         {
             b.Input = inp with { Invert = !inp.Invert }; b.Raw = null; SaveProfile(); RefreshGrid();
         }
+        else if (col == "Inv" && a.Kind == ActionKind.Axis) SetStatus("Bind an axis first (Detect), then you can invert it.", true);
         else if (col == "Clear") { _profile.Bindings.Remove(a.Key); SaveProfile(); RefreshGrid(); }
     }
 
