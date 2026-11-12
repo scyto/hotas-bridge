@@ -24,4 +24,4 @@ Windows app (.NET 8 WinForms + Vortice.DirectInput) that maps HOTAS inputs into 
 - Flightdeck stick recovery: hold B3 while plugging in (lights flash blue/green), then Hangar → Stick → Firmware. Throttle: hold B18 while plugging in.
 
 ## Roadmap
-See the whiteboard: loadouts (game + devices + required Hangar settings + binding file), first-run scan, Fly button with drift check, sharing, reference cards, and more adapters (Elite, Star Citizen, DCS, Squadrons).
+See the [roadmap whiteboard](https://claude.ai/artifact/CYnSiZxVFVQSVZXcTDLny9) (private to the owner): loadouts (game + devices + required Hangar settings + binding file), first-run scan, Fly button with drift check, sharing, reference cards, and more adapters (Elite, Star Citizen, DCS, Squadrons).
