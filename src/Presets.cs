@@ -12,8 +12,9 @@ public static class Presets
     public static readonly Guid VelocityOneRudder = new("701210F5-0000-0000-0000-504944564944");
 
     /// <summary>Buttons that physically exist, for devices that report more than they have (DirectInput can't tell).
-    /// The Flightdeck Stick reports 40 but has 33 (user-confirmed: 34–40 never fire).</summary>
-    public static readonly IReadOnlyDictionary<Guid, int> PhysicalButtons = new Dictionary<Guid, int> { [FlightdeckStick] = 33 };
+    /// From the VelocityOne Flightdeck Quick Flight Guide: the stick reports 40 but has 1–33 (user-confirmed: 34–40 never
+    /// fire), the throttle reports 47 but has 1–41.</summary>
+    public static readonly IReadOnlyDictionary<Guid, int> PhysicalButtons = new Dictionary<Guid, int> { [FlightdeckStick] = 33, [FlightdeckThrottle] = 41 };
 
     static InputRef B(int n) => new(InputKind.Button, n - 1);
     static InputRef A(int i, bool inv = false) => new(InputKind.Axis, i, '\0', inv);
