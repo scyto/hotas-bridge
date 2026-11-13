@@ -477,6 +477,7 @@ sealed class MainForm : Form
         if (_di == null) return;
         _di.PollAll();
         FireSystemButtons(); // before CheckListen, so the press that Detect binds to Guide doesn't also fire it
+        DriveGameBar();
         CheckListen();
         foreach (Control c in _devices.Controls) c.Invalidate();
     }
@@ -498,6 +499,51 @@ sealed class MainForm : Form
     }
     long? _shareDownAt; // when Share went down (null = up)
     bool _shareHeld;    // this press already saved a clip
+
+    // ---------- Game Bar navigation ----------
+    // The Xbox Game Bar takes Xbox controller, mouse or keyboard input, not a joystick. While it's open, the game's menu
+    // bindings (actions with a Nav role) press keys instead, so the buttons that move around the game's menus move around
+    // the Game Bar too. Directions repeat while held, like a held key.
+    static readonly Dictionary<MenuNav, ushort[]> NavKeys = new()
+    {
+        [MenuNav.Up] = new[] { KeyInput.Up }, [MenuNav.Down] = new[] { KeyInput.Down },
+        [MenuNav.Left] = new[] { KeyInput.Left }, [MenuNav.Right] = new[] { KeyInput.Right },
+        [MenuNav.Confirm] = new[] { KeyInput.Enter }, [MenuNav.Back] = new[] { KeyInput.Escape },
+        [MenuNav.Prev] = new[] { KeyInput.Shift, KeyInput.Tab }, [MenuNav.Next] = new[] { KeyInput.Tab },
+    };
+    const long NavRepeatDelayMs = 400, NavRepeatMs = 110, GameBarCheckMs = 100;
+    readonly Dictionary<MenuNav, long> _navNextRepeat = new(); // roles held now → when to repeat
+    bool _gameBarOpen;
+    long _gameBarCheckAt;
+
+    void DriveGameBar()
+    {
+        long now = Environment.TickCount64;
+        if (now >= _gameBarCheckAt) { _gameBarOpen = GameBarState.IsInputRedirected; _gameBarCheckAt = now + GameBarCheckMs; }
+        if (!_gameBarOpen || _listenKey != null || _di == null) { _navNextRepeat.Clear(); return; }
+        foreach (var (nav, keys) in NavKeys)
+        {
+            bool held = _adapter.Actions.Any(a => a.Nav == nav && _profile.Bindings.TryGetValue(a.Key, out var b) && IsHeld(b));
+            if (!held) { _navNextRepeat.Remove(nav); continue; }
+            bool repeats = nav is MenuNav.Up or MenuNav.Down or MenuNav.Left or MenuNav.Right;
+            if (!_navNextRepeat.TryGetValue(nav, out var next)) { KeyInput.Press(keys); _navNextRepeat[nav] = now + NavRepeatDelayMs; }
+            else if (repeats && now >= next) { KeyInput.Press(keys); _navNextRepeat[nav] = now + NavRepeatMs; }
+        }
+    }
+
+    /// <summary>Whether a binding's control is held now (or was tapped since the last poll).</summary>
+    bool IsHeld(Binding b)
+    {
+        if (b.Raw != null || b.Input is not { } i) return false;
+        var s = _di?.Devices.FirstOrDefault(x => x.Info.ProductGuid == b.DeviceProduct)?.State;
+        if (s == null) return false;
+        return i.Kind switch
+        {
+            InputKind.Button => i.Index < s.Buttons.Length && (s.Buttons[i.Index] || s.Pressed.Contains(i.Index)),
+            InputKind.Pov => i.Index < s.PovCount && DirectInputService.PovDir(s.Pov[i.Index]) == i.Direction,
+            _ => false
+        };
+    }
 
     /// <summary>A bound system button: pressed since the last poll, and held now. Null if unbound or its device is unplugged.</summary>
     (bool pressed, bool down)? SystemState(GameAction a)
