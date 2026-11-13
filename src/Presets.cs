@@ -11,6 +11,10 @@ public static class Presets
     // HID gamepad: AC7 ignores it until it reports as Flight (DeviceTypeOverride). X/Y toe brakes, Z rudder.
     public static readonly Guid VelocityOneRudder = new("701210F5-0000-0000-0000-504944564944");
 
+    /// <summary>Buttons that physically exist, for devices that report more than they have (DirectInput can't tell).
+    /// The Flightdeck Stick reports 40 but has 33 (user-confirmed: 34–40 never fire).</summary>
+    public static readonly IReadOnlyDictionary<Guid, int> PhysicalButtons = new Dictionary<Guid, int> { [FlightdeckStick] = 33 };
+
     static InputRef B(int n) => new(InputKind.Button, n - 1);
     static InputRef A(int i, bool inv = false) => new(InputKind.Axis, i, '\0', inv);
     static InputRef H(int hat, char d) => new(InputKind.Pov, hat - 1, d);

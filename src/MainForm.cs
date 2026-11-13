@@ -305,11 +305,9 @@ sealed class MainForm : Form
         else if (_adapter.CheckRaw(text) is { } why) { SetStatus(why + " Not saved.", true); BeginInvoke(new Action(RefreshGrid)); return; }
         else if (_profile.Bindings.TryGetValue(a.Key, out var b))
         {
-            b.Raw = text;
-            var over = System.Text.RegularExpressions.Regex.Matches(text, @"Button(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
-                .Select(m => int.Parse(m.Groups[1].Value)).Where(n => n > _adapter.MaxButtons).ToList();
-            SetStatus(over.Count == 0 ? $"{a.Key} = {text}" :
-                $"{a.Key} = {text}. {GameShortName} is thought to read only buttons 1–{_adapter.MaxButtons}, so Button{over[0]} may do nothing: try it in-game.", over.Count > 0);
+            if (_adapter.ParseInput(text) is { } single) { b.Input = single; b.Raw = null; } // a plain control: a normal binding again
+            else b.Raw = text;
+            SetStatus($"{a.Key} = {text}");
         }
         else { SetStatus("Use Detect first so the binding knows which device it belongs to; then you can edit the text.", true); }
         SaveProfile();
@@ -387,12 +385,9 @@ sealed class MainForm : Form
         var why = _adapter.Unsupported(input);
         if (why != null)
         {
-            if (input.Kind == InputKind.Button && input.Index >= _adapter.MaxButtons) // the limit is believed, not proven: say how to try it anyway
-            {
-                SetStatus($"{why} To try it anyway: press Esc, then type Button{input.Index + 1} in the Binding cell.", true);
-                ShowListenNote($"{GameShortName} reads Button1–{_adapter.MaxButtons}; to try Button{input.Index + 1}, press Esc and type it in Binding");
-            }
-            else { SetStatus(why + " Try another control.", true); ShowListenNote(why); }
+            bool overLimit = input.Kind == InputKind.Button && input.Index >= _adapter.MaxButtons;
+            SetStatus(why + (overLimit ? " Try another control, or use it as a System button (Guide, Share)." : " Try another control."), true);
+            ShowListenNote(why);
             return false;
         }
         var key = _listenKey!; _listenKey = null;
@@ -422,7 +417,8 @@ sealed class MainForm : Form
                 bool xinput = d.Info.IsXInput; // the game reads it through XInput: its DirectInput type is irrelevant
                 bool ignored = !xinput && _adapter.UnsupportedDevice(d.Info.DeviceType, d.Info.ProductName) != null;
                 var v = new DeviceView(d) { Width = CardWidth, Warn = ignored, Overridden = DeviceTypeOverride.Get(d.Info) != ReportAs.Original,
-                                            ButtonLimit = _adapter.MaxButtons, GameName = xinput ? null : GameShortName };
+                                            ButtonLimit = _adapter.MaxButtons, GameName = xinput ? null : GameShortName,
+                                            PhysicalButtons = Presets.PhysicalButtons.TryGetValue(d.Info.ProductGuid, out var real) ? real : null };
                 if (xinput) v.Note = "Xbox controller: games read it directly (XInput). Nothing to set up here.";
                 else if (ignored) v.Note = $"{GameShortName} ignores {d.Info.DeviceType} devices. Click {d.Info.DeviceType} ▾ to change it.";
                 else if (!known.ContainsKey(d.Info.ProductGuid)) v.Note = "Not in the game's config yet. A section will be created on install.";

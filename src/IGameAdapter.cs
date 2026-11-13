@@ -25,6 +25,8 @@ public interface IGameAdapter
 
     /// <summary>Null if typed binding text is valid in the game's syntax, else why not (shown, and the text isn't saved).</summary>
     string? CheckRaw(string text);
+    /// <summary>The input for typed text that names a single control (e.g. "Button8", "Y:R"); null for anything else.</summary>
+    InputRef? ParseInput(string text);
     /// <summary>The bindings in a copy of the game's file (e.g. a backup), as profile bindings, so Restore can bring the grid
     /// back to match the restored file.</summary>
     Dictionary<string, Binding> ReadBindings(string path);

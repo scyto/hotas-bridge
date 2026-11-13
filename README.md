@@ -28,7 +28,7 @@ Bindings are saved per game in `%APPDATA%\HotasBridge\<game>.json`, and app sett
 Implement `IGameAdapter` (config path, action list, input syntax, install, backups) and add it to `GameRegistry.All`. Device-specific defaults go in `Presets.BuiltIn`. Inputs are stored neutrally (`InputRef`: axis, button or hat plus direction), so the same physical binding can be written in each game's syntax.
 
 ## AC7 notes
-- AC7 reads Button1–32 and 4 hats. Detect refuses anything outside that range for AC7 actions (the row says why). Device cards split their buttons into the ones AC7 reads and the rest, which System buttons can still use.
+- AC7 reads Button1–32 and 4 hats (tested: Button33 does nothing). Detect and typed bindings refuse anything outside that range. Device cards split their buttons into the ones AC7 reads and the rest, which System buttons can still use (for the Flightdeck Stick, button 33).
 - AC7 only reads devices that Windows reports as a joystick, flight stick or 1st-person controller. Devices that report as a **gamepad** are ignored, and that includes the **VelocityOne Rudder** out of the box. Set the rudder to **Flight stick / yoke** on its card, then load the rudder preset. Its toe brakes (X, Y) stay available as axes. The Flightdeck Stick preset puts yaw on stick twist for anyone without pedals.
 - AC7's in-game controls menu only configures the Thrustmaster T.Flight HOTAS One. Other devices can only be set up through `Input.ini`, which is what this app writes.
 - Devices disagree about which way their axes count, and AC7 expects a particular direction for each action. For the throttle, lower values are faster. Detect asks for a movement and inverts the axis when needed; the Flightdeck Throttle, for example, needs `X:R`.

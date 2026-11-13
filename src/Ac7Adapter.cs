@@ -22,6 +22,7 @@ public sealed class Ac7Adapter : IGameAdapter
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "BANDAI NAMCO Entertainment", "ACE COMBAT 7", "Config", "Input.ini");
 
+    // Buttons: AC7 reads Button1–32 (confirmed in-game: Button33 did nothing, and AC7 blanked it when it rewrote Input.ini).
     // Gesture directions, per action (Models.GameAction). Throttle: AC7 is faster at lower values (the usual DirectInput
     // throttle convention). The Flightdeck Throttle's X rises when pushed forward (seen by Detect), so it needs X:R; in-game,
     // plain X made pulling back accelerate. Pitch: the Flightdeck Stick's Y falls going forward (measured: -1 fully forward)
@@ -109,14 +110,16 @@ public sealed class Ac7Adapter : IGameAdapter
     // ---- typed bindings, and reading bindings back from a file ----
     static readonly Regex Token = new(@"^(?:X|Y|Z|Rx|Ry|Rz|Slider[12]|POV_[UDLR][1-4]|Button\d{1,3})(?::[PNRC])*$", RegexOptions.IgnoreCase);
 
-    /// <summary>Inputs (X … Slider2, POV_U1 … POV_R4, ButtonN) with modifiers :P :N :R :C, joined by &amp; ! + &gt; &lt;.
-    /// Buttons above 32 pass, so they can be tried in-game (the 32 limit is unverified).</summary>
+    /// <summary>Inputs (X … Slider2, POV_U1 … POV_R4, Button1 … Button32) with modifiers :P :N :R :C, joined by &amp; ! + &gt; &lt;.</summary>
     public string? CheckRaw(string text)
     {
         var parts = Regex.Split(text.Trim(), @"\s*[&!+<>]\s*").Where(p => p.Length > 0).ToList();
         if (parts.Count == 0) return "That's empty.";
         var bad = parts.FirstOrDefault(p => !Token.IsMatch(p));
-        return bad == null ? null : $"\"{bad}\" isn't AC7 binding syntax (e.g. Button3, POV_U1, Y:R).";
+        if (bad != null) return $"\"{bad}\" isn't AC7 binding syntax (e.g. Button3, POV_U1, Y:R).";
+        var over = parts.Select(p => Regex.Match(p, @"^Button(\d+)", RegexOptions.IgnoreCase))
+                        .FirstOrDefault(m => m.Success && int.Parse(m.Groups[1].Value) > MaxButtons);
+        return over == null ? null : $"AC7 only reads Button1–{MaxButtons} ({over.Value} does nothing in-game; tested).";
     }
 
     /// <summary>Simple values become inputs (as Detect would make them); anything else is kept as typed text. The profile holds
@@ -134,7 +137,7 @@ public sealed class Ac7Adapter : IGameAdapter
                 if (!keys.TryGetValue(KeyOf(l), out var key) || result.ContainsKey(key)) continue;
                 var v = ValOf(l);
                 if (v.Length == 0) continue;
-                var input = ParseInput(v);
+                var input = ParseToken(v);
                 if (input == null && CheckRaw(v) != null) continue; // not a binding AC7 could read (e.g. stray text)
                 result[key] = new Binding { DeviceProduct = product, DeviceName = name, Input = input, Raw = input == null ? v : null };
             }
@@ -142,7 +145,9 @@ public sealed class Ac7Adapter : IGameAdapter
         return result;
     }
 
-    static InputRef? ParseInput(string v)
+    public InputRef? ParseInput(string v) => ParseToken(v.Trim());
+
+    static InputRef? ParseToken(string v)
     {
         var m = Regex.Match(v, @"^(X|Y|Z|Rx|Ry|Rz|Slider1|Slider2)(:R)?$", RegexOptions.IgnoreCase);
         if (m.Success) return new InputRef(InputKind.Axis, Array.FindIndex(InputRef.AxisNames, n => n.Equals(m.Groups[1].Value, StringComparison.OrdinalIgnoreCase)), '\0', m.Groups[2].Success);

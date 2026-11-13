@@ -59,6 +59,10 @@ sealed class DeviceView : Control
     /// <summary>The selected game's name. When the device has more buttons than the game reads, the buttons are shown in two
     /// labelled groups: the ones the game reads, and the rest (which system buttons can still use).</summary>
     public string? GameName { get => _gameName; set { _gameName = value; Remeasure(); } }
+    /// <summary>How many buttons physically exist, when the device reports more (Presets.PhysicalButtons); null = trust it.</summary>
+    public int? PhysicalButtons { get => _physical; set { _physical = value; Remeasure(); } }
+    int? _physical;
+    int ShownButtons => Math.Min(Math.Min(Device.State.ButtonCount, 128), _physical ?? 128);
     string? _gameName;
     void Remeasure() { Height = CalcHeight(Math.Max(Width, S(340))); Invalidate(); }
     /// <summary>The "reports as" button; clicking it raises TypeClicked.</summary>
@@ -136,7 +140,7 @@ sealed class DeviceView : Control
     /// than the game reads, the ones it reads and the rest.</summary>
     (string? heading, int from, int to)[] ButtonGroups()
     {
-        int n = Math.Min(Device.State.ButtonCount, 128);
+        int n = ShownButtons;
         if (n <= ButtonLimit || GameName == null) return new (string?, int, int)[] { (null, 0, n) };
         return new (string?, int, int)[]
         {
@@ -175,7 +179,7 @@ sealed class DeviceView : Control
         int pad = Pad, line = LineH, y = pad;
         TextRenderer.DrawText(g, Device.Info.ProductName, _bold, new Point(pad, y), Theme.Text);
         y += TitleRowH + S(2);
-        var id = $"{Device.Info.VidPid} · {s.ButtonCount} btn · {s.PovCount} hat" + (Overridden ? " · type changed in Windows" : "");
+        var id = $"{Device.Info.VidPid} · {ShownButtons} btn · {s.PovCount} hat" + (Overridden ? " · type changed in Windows" : "");
         TextRenderer.DrawText(g, id, _mono, new Point(pad, y), Theme.Dim);
         y += line;
         if (Note != null) { y += S(2); TextRenderer.DrawText(g, Note, _mono, new Point(pad, y), Theme.Amber); y += line; }
