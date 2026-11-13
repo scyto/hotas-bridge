@@ -21,15 +21,18 @@ public sealed class Ac7Adapter : IGameAdapter
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "BANDAI NAMCO Entertainment", "ACE COMBAT 7", "Config", "Input.ini");
 
-    // Gestures: AC7 reads forward and right as positive. Measured: the Flightdeck Stick needs Y:R for pitch (it reports
-    // forward as negative, like most sticks), and the Flightdeck Throttle needs X:R so that forward is faster.
+    // Gesture directions, per action (Models.GameAction). Throttle: AC7 is faster at lower values (the usual DirectInput
+    // throttle convention). The Flightdeck Throttle's X rises when pushed forward (seen by Detect), so it needs X:R; in-game,
+    // plain X made pulling back accelerate. Pitch: the Flightdeck Stick preset's Y:R flies right; if the stick's Y falls going
+    // forward like most sticks, AC7 wants rising (as set here). That stick direction hasn't been measured yet.
+    // Roll and yaw: right = rising.
     // Camera axes have no gesture: their direction hasn't been checked in-game.
     public IReadOnlyList<GameAction> Actions { get; } = new GameAction[]
     {
         new("Flight_Pitch", "Flight", "Pitch", ActionKind.Axis, "push the stick forward"),
         new("Flight_Roll", "Flight", "Roll", ActionKind.Axis, "move the stick right"),
         new("Flight_Yaw", "Flight", "Yaw (pedals / twist)", ActionKind.Axis, "push the right pedal (or twist the stick right)"),
-        new("Flight_Throttle", "Flight", "Throttle (centre = cruise)", ActionKind.Axis, "push the throttle forward, starting from the back"),
+        new("Flight_Throttle", "Flight", "Throttle (centre = cruise)", ActionKind.Axis, "push the throttle forward, starting from the back", GestureNegative: true),
         new("Flight_Gun", "Flight", "Fire gun", ActionKind.Button),
         new("Flight_Missile", "Flight", "Fire missile / special", ActionKind.Button),
         new("Flight_Weapon", "Flight", "Toggle missile / special", ActionKind.Button),
