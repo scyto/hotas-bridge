@@ -385,7 +385,16 @@ sealed class MainForm : Form
         var devWhy = _adapter.UnsupportedDevice(d.Info.DeviceType, d.Info.ProductName);
         if (devWhy != null) { SetStatus(devWhy + $" Click {d.Info.DeviceType} ▾ on its card to change what it reports as.", true); ShowListenNote(devWhy); return false; }
         var why = _adapter.Unsupported(input);
-        if (why != null) { SetStatus(why + " Try another control.", true); ShowListenNote(why); return false; }
+        if (why != null)
+        {
+            if (input.Kind == InputKind.Button && input.Index >= _adapter.MaxButtons) // the limit is believed, not proven: say how to try it anyway
+            {
+                SetStatus($"{why} To try it anyway: press Esc, then type Button{input.Index + 1} in the Binding cell.", true);
+                ShowListenNote($"{GameShortName} reads Button1–{_adapter.MaxButtons}; to try Button{input.Index + 1}, press Esc and type it in Binding");
+            }
+            else { SetStatus(why + " Try another control.", true); ShowListenNote(why); }
+            return false;
+        }
         var key = _listenKey!; _listenKey = null;
         _profile.Bindings[key] = new Binding { DeviceProduct = d.Info.ProductGuid, DeviceName = d.Info.ProductName, DeviceType = d.Info.DeviceType, Input = input };
         SaveProfile(); RefreshGrid();
