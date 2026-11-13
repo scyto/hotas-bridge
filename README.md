@@ -18,7 +18,7 @@ Double-click `build.cmd` (needs the .NET 8 SDK). The exe ends up in `out\HotasBr
 
 System buttons can be any button, including ones the game can't read (greyed on the device cards). The Flightdeck Stick preset puts Guide on START (22) and Share on 33.
 
-While the Game Bar is open, your **Menus** bindings drive it, since it doesn't take joystick input: menu up/down/left/right (stick or D-pad rows) press the arrow keys, A (confirm) presses Enter, B (back) presses Esc and closes it, and LB/RB press Shift+Tab/Tab.
+While the Game Bar is open, your **Menus** bindings drive it like a pad, since it doesn't take joystick input. Menu left/right (stick or D-pad rows), or LB/RB, move between widgets, and each one opens as you land on it. Menu down goes into the widget and down through it; up goes back. A (confirm) selects, and B (back) closes the Game Bar. Under the hood these are keys: arrows, Tab/Shift+Tab, Enter and Esc.
 
 **Text size ▾** makes the whole window bigger (100–200%), on top of Windows' display scaling. It applies straight away and is remembered.
 

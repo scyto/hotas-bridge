@@ -507,13 +507,15 @@ sealed class MainForm : Form
     // ---------- Game Bar navigation ----------
     // The Xbox Game Bar takes Xbox controller, mouse or keyboard input, not a joystick. While it's open, the game's menu
     // bindings (actions with a Nav role) press keys instead, so the buttons that move around the game's menus move around
-    // the Game Bar too. Directions repeat while held, like a held key.
+    // the Game Bar too, the way a pad does: Left/Right move along the widget bar (each widget opens as you land on it),
+    // Down goes into the widget and down through it. With keys, only the widget bar answers the arrow keys; inside a
+    // widget, moving between items is Tab / Shift+Tab, so Up/Down send those. Directions repeat while held.
     static readonly Dictionary<MenuNav, ushort[]> NavKeys = new()
     {
-        [MenuNav.Up] = new[] { KeyInput.Up }, [MenuNav.Down] = new[] { KeyInput.Down },
+        [MenuNav.Up] = new[] { KeyInput.Shift, KeyInput.Tab }, [MenuNav.Down] = new[] { KeyInput.Tab },
         [MenuNav.Left] = new[] { KeyInput.Left }, [MenuNav.Right] = new[] { KeyInput.Right },
         [MenuNav.Confirm] = new[] { KeyInput.Enter }, [MenuNav.Back] = new[] { KeyInput.Escape },
-        [MenuNav.Prev] = new[] { KeyInput.Shift, KeyInput.Tab }, [MenuNav.Next] = new[] { KeyInput.Tab },
+        [MenuNav.Prev] = new[] { KeyInput.Left }, [MenuNav.Next] = new[] { KeyInput.Right }, // previous / next widget
     };
     const long NavRepeatDelayMs = 400, NavRepeatMs = 110, GameBarCheckMs = 100;
     readonly Dictionary<MenuNav, long> _navNextRepeat = new(); // roles held now → when to repeat
