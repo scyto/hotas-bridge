@@ -130,7 +130,7 @@ sealed class MainForm : Form
         if (Math.Abs(r - 1f) < 0.001f) return;
         Theme.SetTextScale(scale);
         _settings.TextScale = Theme.TextScale;
-        try { _settings.Save(); } catch (Exception ex) { SetStatus("Couldn't save the text size: " + ex.Message, true); }
+        SaveSettings();
 
         SuspendLayout();
         ApplyFonts();
@@ -203,7 +203,7 @@ sealed class MainForm : Form
     {
         _grid.Rows.Clear();
         string? group = null;
-        foreach (var a in _adapter.Actions)
+        foreach (var a in GridActions)
         {
             if (a.Group != group)
             {
@@ -213,15 +213,17 @@ sealed class MainForm : Form
                 row.DefaultCellStyle = new DataGridViewCellStyle { BackColor = Theme.Bg, ForeColor = Theme.Amber, Font = Theme.UiBold, SelectionBackColor = Theme.Bg };
                 foreach (var col in new[] { "Detect", "Inv", "Clear" }) row.Cells[col] = new DataGridViewTextBoxCell { Value = "" }; // no buttons on group rows
             }
-            _profile.Bindings.TryGetValue(a.Key, out var b);
-            string inputText = b == null ? "" : (b.Raw ?? (b.Input != null ? _adapter.Format(b.Input) ?? "(unsupported)" : ""));
-            if (b != null && _adapter.UnsupportedDevice(b.DeviceType, b.DeviceName) != null) inputText = "(device ignored by game) " + inputText;
+            bool sys = a.Group == SystemButtons.Group;
+            var b = sys ? SystemBindingFor(a) : _profile.Bindings.GetValueOrDefault(a.Key);
+            string inputText = b == null ? "" : sys ? $"Button{b.Input!.Index + 1}" : (b.Raw ?? (b.Input != null ? _adapter.Format(b.Input) ?? "(unsupported)" : ""));
+            if (b != null && !sys && _adapter.UnsupportedDevice(b.DeviceType, b.DeviceName) != null) inputText = "(device ignored by game) " + inputText;
             bool listening = _listenKey == a.Key;
             bool inverted = b?.Raw == null && b?.Input is { Kind: InputKind.Axis, Invert: true };
             int r = _grid.Rows.Add(a.Key, a.Description + (a.Kind == ActionKind.Axis ? "  ·axis" : ""), b?.DeviceName ?? "",
                 listening ? "waiting for input…" : inputText, listening ? "Press…" : "Detect", inverted ? "⇅ on" : "⇅", "×");
             var gr = _grid.Rows[r];
             gr.Tag = a;
+            if (sys) { gr.Cells["Input"].ReadOnly = true; gr.Cells["Action"].ToolTipText = gr.Cells["Desc"].ToolTipText = SystemButtons.Tip; }
             if (listening) gr.DefaultCellStyle.BackColor = Color.FromArgb(60, 42, 12);
             if (a.Kind != ActionKind.Axis) gr.Cells["Inv"] = new DataGridViewTextBoxCell { Value = "" }; // only axes can be inverted
             else
@@ -233,6 +235,15 @@ sealed class MainForm : Form
             if (b == null) gr.Cells["Clear"] = new DataGridViewTextBoxCell { Value = "" }; // nothing to clear
         }
     }
+
+    /// <summary>The grid's rows: the game's actions, then the system buttons (which work in every game).</summary>
+    IEnumerable<GameAction> GridActions => _adapter.Actions.Concat(SystemButtons.All);
+    GameAction ActionFor(string key) => GridActions.First(x => x.Key == key);
+
+    /// <summary>A system button's binding (kept in AppSettings), shaped like a game binding for the grid.</summary>
+    Binding? SystemBindingFor(GameAction a) => a == SystemButtons.Guide && _settings.Guide is { } g
+        ? new Binding { DeviceProduct = g.DeviceProduct, DeviceName = g.DeviceName, Input = new InputRef(InputKind.Button, g.Button) }
+        : null;
 
     void Grid_CellContentClick(object? sender, DataGridViewCellEventArgs e)
     {
@@ -249,12 +260,13 @@ sealed class MainForm : Form
             b.Input = inp with { Invert = !inp.Invert }; b.Raw = null; SaveProfile(); RefreshGrid();
         }
         else if (col == "Inv" && a.Kind == ActionKind.Axis) SetStatus("Bind an axis first (Detect), then you can invert it.", true);
+        else if (col == "Clear" && a.Group == SystemButtons.Group) { _settings.Guide = null; SaveSettings(); RefreshGrid(); }
         else if (col == "Clear") { _profile.Bindings.Remove(a.Key); SaveProfile(); RefreshGrid(); }
     }
 
     void Grid_CellEndEdit(object? sender, DataGridViewCellEventArgs e)
     {
-        if (_grid.Rows[e.RowIndex].Tag is not GameAction a || _grid.Columns[e.ColumnIndex].Name != "Input") return;
+        if (_grid.Rows[e.RowIndex].Tag is not GameAction a || _grid.Columns[e.ColumnIndex].Name != "Input" || a.Group == SystemButtons.Group) return;
         var text = (_grid.Rows[e.RowIndex].Cells[e.ColumnIndex].Value as string)?.Trim() ?? "";
         if (text.Length == 0) { _profile.Bindings.Remove(a.Key); }
         else if (_profile.Bindings.TryGetValue(a.Key, out var b)) { b.Raw = text; }
@@ -269,8 +281,9 @@ sealed class MainForm : Form
         _listenKey = key;
         _baseline = new();
         if (_di != null) foreach (var d in _di.Devices) _baseline[d.Info.InstanceGuid] = Snap(d.State);
-        var a = _adapter.Actions.First(x => x.Key == key);
-        var what = a.Kind == ActionKind.Button ? "press a button or push a hat" : a.Gesture ?? "move the axis you want";
+        var a = ActionFor(key);
+        var what = a.Group == SystemButtons.Group ? "press a button" :
+                   a.Kind == ActionKind.Button ? "press a button or push a hat" : a.Gesture ?? "move the axis you want";
         SetStatus($"Listening for {key}: {what}. Click Press… or Esc to cancel.");
     }
 
@@ -290,7 +303,7 @@ sealed class MainForm : Form
     void CheckListen()
     {
         if (_listenKey == null || _di == null) return;
-        var action = _adapter.Actions.First(x => x.Key == _listenKey);
+        var action = ActionFor(_listenKey);
         foreach (var d in _di.Devices)
         {
             var s = d.State;
@@ -309,6 +322,7 @@ sealed class MainForm : Form
                 if (Bind(d, new InputRef(InputKind.Button, i))) return;
                 b.btn[i] = true; // unsupported: ignore this one and keep listening
             }
+            if (action.Group == SystemButtons.Group) continue; // system buttons are buttons only
             for (int h = 0; h < s.PovCount; h++)
             {
                 char dir = DirectInputService.PovDir(s.Pov[h]);
@@ -319,6 +333,14 @@ sealed class MainForm : Form
 
     bool Bind(LiveDevice d, InputRef input)
     {
+        if (ActionFor(_listenKey!).Group == SystemButtons.Group) // any device type and button: the game never sees it
+        {
+            _listenKey = null;
+            _settings.Guide = new SystemBinding { DeviceProduct = d.Info.ProductGuid, DeviceName = d.Info.ProductName, Button = input.Index };
+            SaveSettings(); RefreshGrid();
+            SetStatus($"Guide = Button{input.Index + 1} on {d.Info.ProductName}. It works while HOTAS Bridge is running, so leave it open (minimized is fine).");
+            return true;
+        }
         var devWhy = _adapter.UnsupportedDevice(d.Info.DeviceType, d.Info.ProductName);
         if (devWhy != null) { SetStatus(devWhy + $" Click {d.Info.DeviceType} ▾ on its card to change what it reports as.", true); return false; }
         var why = _adapter.Unsupported(input);
@@ -326,7 +348,7 @@ sealed class MainForm : Form
         var key = _listenKey!; _listenKey = null;
         _profile.Bindings[key] = new Binding { DeviceProduct = d.Info.ProductGuid, DeviceName = d.Info.ProductName, DeviceType = d.Info.DeviceType, Input = input };
         SaveProfile(); RefreshGrid();
-        var gesture = _adapter.Actions.First(x => x.Key == key).Gesture;
+        var gesture = ActionFor(key).Gesture;
         SetStatus($"{key} = {_adapter.Format(input)} on {d.Info.ProductName}" +
                   (input.Invert && gesture != null ? " (inverted: this device reports that movement backwards). If it's the wrong way round, click ⇅." :
                    gesture != null ? ". If it's the wrong way round, click ⇅." : ""));
@@ -448,8 +470,23 @@ sealed class MainForm : Form
     {
         if (_di == null) return;
         _di.PollAll();
+        FireSystemButtons(); // before CheckListen, so the press that Detect binds to Guide doesn't also fire it
         CheckListen();
         foreach (Control c in _devices.Controls) c.Invalidate();
+    }
+
+    /// <summary>Acts on system buttons pressed since the last poll (buffered, so short presses count). Not while Detect is
+    /// listening, so a button can be detected without firing.</summary>
+    void FireSystemButtons()
+    {
+        if (_listenKey != null || _di == null || _settings.Guide is not { } g) return;
+        var d = _di.Devices.FirstOrDefault(x => x.Info.ProductGuid == g.DeviceProduct);
+        if (d != null && d.State.Pressed.Contains(g.Button)) SystemButtons.OpenGameBar();
+    }
+
+    void SaveSettings()
+    {
+        try { _settings.Save(); } catch (Exception ex) { SetStatus("Couldn't save settings: " + ex.Message, true); }
     }
 
     // ---------- game / presets / install ----------
@@ -479,9 +516,14 @@ sealed class MainForm : Form
             {
                 foreach (var (k, v) in p.Map)
                     _profile.Bindings[k] = new Binding { DeviceProduct = p.DeviceProduct, DeviceName = connected?.Info.ProductName ?? p.DeviceName, DeviceType = connected?.Info.DeviceType, Input = v };
+                if (p.Guide is { Kind: InputKind.Button } guide)
+                {
+                    _settings.Guide = new SystemBinding { DeviceProduct = p.DeviceProduct, DeviceName = connected?.Info.ProductName ?? p.DeviceName, Button = guide.Index };
+                    SaveSettings();
+                }
                 SaveProfile(); RefreshGrid();
                 var devWhy = connected == null ? null : _adapter.UnsupportedDevice(connected.Info.DeviceType, connected.Info.ProductName);
-                SetStatus($"Loaded preset '{p.Name}' ({p.Map.Count} bindings)." +
+                SetStatus($"Loaded preset '{p.Name}' ({p.Map.Count} bindings{(p.Guide != null ? $", Guide on Button{p.Guide.Index + 1}" : "")})." +
                           (devWhy == null ? "" : $" {devWhy} Click {connected!.Info.DeviceType} ▾ on its card to change it."), devWhy != null);
             };
             m.Items.Add(item);

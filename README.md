@@ -12,6 +12,8 @@ Double-click `build.cmd` (needs the .NET 8 SDK). The exe ends up in `out\HotasBr
 4. For anything else, click **Detect** on a row, then press a button or push a hat. Short pulses are caught too, such as the thumb wheel in buttons mode. For an axis, Detect asks for a movement, e.g. *push the throttle forward, starting from the back*, and sets the direction from it, because devices disagree about which way is positive. Click **⇅** to flip an axis by hand.
 5. **Back up & overwrite** copies the current file to `Input.ini.bak-<date-time>`, then writes the new one. **Restore ▾** brings a backup back, and backs up the current file first. Next to the file path, **✓ matches your bindings** or **● N changes not written yet** says whether the file has what the grid shows; hover it to see the changes. Write with the game closed, since AC7 rewrites `Input.ini` when it exits.
 
+**System → Guide** (at the bottom of the grid) works in every game: while HOTAS Bridge is running (minimized is fine), that button presses Win+G, which opens the Xbox Game Bar like Guide on an Xbox controller. Games can't bind Guide themselves, because Windows handles it and the game never sees it. The Flightdeck Stick preset puts it on START (Button22).
+
 **Text size ▾** makes the whole window bigger (100–200%), on top of Windows' display scaling. It applies straight away and is remembered.
 
 Bindings are saved per game in `%APPDATA%\HotasBridge\<game>.json`, and app settings in `settings.json` next to them.
