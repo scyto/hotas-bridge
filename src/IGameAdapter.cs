@@ -13,6 +13,8 @@ public interface IGameAdapter
     string? ProcessName { get; }
     string ConfigPath { get; }
     IReadOnlyList<GameAction> Actions { get; }
+    /// <summary>How many buttons the game reads (AC7: 32). Device cards grey out the rest; system buttons can still use them.</summary>
+    int MaxButtons { get; }
 
     /// <summary>Game syntax for an input, or null if the game can't use it (e.g. Button 33 in AC7).</summary>
     string? Format(InputRef input);

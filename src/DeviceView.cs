@@ -53,6 +53,10 @@ sealed class DeviceView : Control
     public bool Warn { get => _warn; set { _warn = value; StyleTypeButton(); } }
     /// <summary>True when HOTAS Bridge (or anyone) has overridden the type this device reports.</summary>
     public bool Overridden { get; set; }
+    /// <summary>How many buttons the selected game reads; the rest are drawn greyed (they still light up when pressed).</summary>
+    public int ButtonLimit { get; set; } = 128;
+    /// <summary>Shown after the button count when the device has more buttons than the game reads, e.g. "AC7 reads 1–32".</summary>
+    public string? LimitLabel { get; set; }
     /// <summary>The "reports as" button; clicking it raises TypeClicked.</summary>
     public Button TypeButton => _type;
     public event EventHandler? TypeClicked;
@@ -147,7 +151,8 @@ sealed class DeviceView : Control
         int pad = Pad, line = LineH, y = pad;
         TextRenderer.DrawText(g, Device.Info.ProductName, _bold, new Point(pad, y), Theme.Text);
         y += TitleRowH + S(2);
-        var id = $"{Device.Info.VidPid} · {s.ButtonCount} btn · {s.PovCount} hat" + (Overridden ? " · type changed in Windows" : "");
+        var limit = s.ButtonCount > ButtonLimit && LimitLabel != null ? $" ({LimitLabel})" : "";
+        var id = $"{Device.Info.VidPid} · {s.ButtonCount} btn{limit} · {s.PovCount} hat" + (Overridden ? " · type changed in Windows" : "");
         TextRenderer.DrawText(g, id, _mono, new Point(pad, y), Theme.Dim);
         y += line;
         if (Note != null) { y += S(2); TextRenderer.DrawText(g, Note, _mono, new Point(pad, y), Theme.Amber); y += line; }
@@ -201,7 +206,7 @@ sealed class DeviceView : Control
             bool on = s.Buttons[i];
             using (var b = new SolidBrush(on ? Theme.Amber : Color.FromArgb(22, 24, 27))) g.FillRectangle(b, r);
             using (var p = new Pen(on ? Theme.Amber : Theme.Line)) g.DrawRectangle(p, r);
-            TextRenderer.DrawText(g, (i + 1).ToString(), _mono, r, on ? Color.FromArgb(26, 18, 5) : (i >= 32 ? Color.FromArgb(90, 95, 100) : Theme.Dim),
+            TextRenderer.DrawText(g, (i + 1).ToString(), _mono, r, on ? Color.FromArgb(26, 18, 5) : (i >= ButtonLimit ? Color.FromArgb(90, 95, 100) : Theme.Dim),
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
         }
     }

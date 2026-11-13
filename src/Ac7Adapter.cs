@@ -76,9 +76,11 @@ public sealed class Ac7Adapter : IGameAdapter
 
     static readonly string[] EnableKeys = { "EnableJoystick", "EnableDeviceJoystick", "EnableDeviceFlight", "EnableDevice1stPerson" };
 
+    public int MaxButtons => 32;
+
     public string? Unsupported(InputRef i) => i.Kind switch
     {
-        InputKind.Button when i.Index >= 32 => $"AC7 only reads Button1–32 (this is Button{i.Index + 1}).",
+        InputKind.Button when i.Index >= MaxButtons => $"AC7 only reads Button1–{MaxButtons} (this is Button{i.Index + 1}).",
         InputKind.Pov when i.Index >= 4 => "AC7 only reads 4 hats.",
         _ => null
     };

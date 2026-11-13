@@ -8,6 +8,9 @@ public sealed class AppSettings
     /// <summary>Text size, 1 = 100% (see Theme.TextScales).</summary>
     public float TextScale { get; set; } = 1f;
 
+    /// <summary>Buttons HOTAS Bridge acts on while it runs, keyed by SystemButtons action key ("Guide", "Share").</summary>
+    public Dictionary<string, SystemBinding> System { get; set; } = new();
+
     static readonly string FilePath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "HotasBridge", "settings.json");
 
@@ -23,4 +26,13 @@ public sealed class AppSettings
         Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
         File.WriteAllText(FilePath, JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }));
     }
+}
+
+/// <summary>A device button bound to a system function (any game).</summary>
+public sealed class SystemBinding
+{
+    public Guid DeviceProduct { get; set; }
+    public string DeviceName { get; set; } = "";
+    /// <summary>0-based DirectInput button index.</summary>
+    public int Button { get; set; }
 }

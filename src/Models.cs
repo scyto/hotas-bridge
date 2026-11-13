@@ -48,8 +48,10 @@ public enum ActionKind { Axis, Button }
 /// measured per game and action; games don't agree on one rule.</param>
 public sealed record GameAction(string Key, string Group, string Description, ActionKind Kind, string? Gesture = null, bool GestureNegative = false);
 
-/// <summary>A preset: bindings for one device model (by product GUID) in one game.</summary>
-public sealed record Preset(string Name, string GameId, Guid DeviceProduct, string DeviceName, IReadOnlyDictionary<string, InputRef> Map);
+/// <summary>A preset: bindings for one device model (by product GUID) in one game, plus optionally its system buttons
+/// (Guide, Share: see SystemButtons), keyed by action key.</summary>
+public sealed record Preset(string Name, string GameId, Guid DeviceProduct, string DeviceName, IReadOnlyDictionary<string, InputRef> Map,
+                            IReadOnlyDictionary<string, InputRef>? System = null);
 
 public sealed class GameProfile
 {
