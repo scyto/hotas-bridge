@@ -37,7 +37,7 @@ public sealed class Ac7Adapter : IGameAdapter
         new("Flight_Missile", "Flight", "Fire missile / special", ActionKind.Button),
         new("Flight_Weapon", "Flight", "Toggle missile / special", ActionKind.Button),
         new("Flight_Target", "Flight", "Change target", ActionKind.Button),
-        new("Flight_Radar", "Flight", "Radar zoom", ActionKind.Button),
+        new("Flight_Radar", "Flight", "Radar map", ActionKind.Button),
         new("Flight_Flare", "Flight", "Flares", ActionKind.Button),
         new("Flight_View", "Flight", "Toggle camera", ActionKind.Button),
         new("Flight_AccelerationDeceleration", "Flight", "Hold: high-G turn", ActionKind.Button),
