@@ -23,8 +23,8 @@ public sealed class Ac7Adapter : IGameAdapter
 
     // Gesture directions, per action (Models.GameAction). Throttle: AC7 is faster at lower values (the usual DirectInput
     // throttle convention). The Flightdeck Throttle's X rises when pushed forward (seen by Detect), so it needs X:R; in-game,
-    // plain X made pulling back accelerate. Pitch: the Flightdeck Stick preset's Y:R flies right; if the stick's Y falls going
-    // forward like most sticks, AC7 wants rising (as set here). That stick direction hasn't been measured yet.
+    // plain X made pulling back accelerate. Pitch: the Flightdeck Stick's Y falls going forward (measured: -1 fully forward)
+    // and its Y:R flies right, so AC7 wants pitch rising going forward. (Yes, the opposite of the throttle.)
     // Roll and yaw: right = rising.
     // Camera axes have no gesture: their direction hasn't been checked in-game.
     public IReadOnlyList<GameAction> Actions { get; } = new GameAction[]

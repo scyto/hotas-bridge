@@ -19,6 +19,8 @@ static class GameBarState
     static IntPtr _statics;
     static GetBool? _visible, _inputRedirected;
     static bool _unavailable;
+    /// <summary>Why the state can't be read, once it has failed (for the status line); null while it works.</summary>
+    public static string? Problem { get; private set; }
 
     /// <summary>True while the Game Bar is open and taking input. False when it's closed, or if Windows can't say.</summary>
     public static bool IsInputRedirected => Read(ref _inputRedirected, SlotIsInputRedirected);
@@ -34,16 +36,24 @@ static class GameBarState
             if (_statics == IntPtr.Zero)
             {
                 const string cls = "Windows.Gaming.UI.GameBar";
-                if (WindowsCreateString(cls, cls.Length, out var name) != 0) { _unavailable = true; return false; }
+                int hr = WindowsCreateString(cls, cls.Length, out var name);
+                if (hr != 0) return Fail($"WindowsCreateString 0x{hr:X8}");
                 var iid = IID_IGameBarStatics;
-                int hr = RoGetActivationFactory(name, ref iid, out _statics); // kept for the app's lifetime
+                hr = RoGetActivationFactory(name, ref iid, out _statics); // kept for the app's lifetime
                 WindowsDeleteString(name);
-                if (hr != 0 || _statics == IntPtr.Zero) { _unavailable = true; return false; }
+                if (hr != 0 || _statics == IntPtr.Zero) return Fail($"RoGetActivationFactory 0x{hr:X8}");
             }
             getter ??= Marshal.GetDelegateForFunctionPointer<GetBool>(Marshal.ReadIntPtr(Marshal.ReadIntPtr(_statics), slot * IntPtr.Size));
-            return getter(_statics, out var v) == 0 && v != 0;
+            int r = getter(_statics, out var v);
+            return r == 0 ? v != 0 : Fail($"IGameBarStatics slot {slot} 0x{r:X8}");
         }
-        catch { _unavailable = true; return false; }
+        catch (Exception ex) { return Fail(ex.GetType().Name + ": " + ex.Message); }
+    }
+
+    static bool Fail(string why)
+    {
+        _unavailable = true; Problem = why;
+        return false;
     }
 
     [DllImport("combase.dll")] static extern int RoGetActivationFactory(IntPtr classId, ref Guid iid, out IntPtr factory);

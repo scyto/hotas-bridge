@@ -519,17 +519,31 @@ sealed class MainForm : Form
     void DriveGameBar()
     {
         long now = Environment.TickCount64;
-        if (now >= _gameBarCheckAt) { _gameBarOpen = GameBarState.IsInputRedirected; _gameBarCheckAt = now + GameBarCheckMs; }
+        if (now >= _gameBarCheckAt)
+        {
+            bool open = GameBarState.IsInputRedirected;
+            if (GameBarState.Problem is { } problem && !_gameBarProblemShown)
+            { _gameBarProblemShown = true; SetStatus("Can't tell when the Game Bar is open, so the stick won't drive it: " + problem, true); }
+            if (open != _gameBarOpen) SetStatus(open ? "Game Bar open: your menu buttons drive it (arrows, Enter, Esc, Tab)." : "Game Bar closed.");
+            _gameBarOpen = open; _gameBarCheckAt = now + GameBarCheckMs;
+        }
         if (!_gameBarOpen || _listenKey != null || _di == null) { _navNextRepeat.Clear(); return; }
         foreach (var (nav, keys) in NavKeys)
         {
             bool held = _adapter.Actions.Any(a => a.Nav == nav && _profile.Bindings.TryGetValue(a.Key, out var b) && IsHeld(b));
             if (!held) { _navNextRepeat.Remove(nav); continue; }
             bool repeats = nav is MenuNav.Up or MenuNav.Down or MenuNav.Left or MenuNav.Right;
-            if (!_navNextRepeat.TryGetValue(nav, out var next)) { KeyInput.Press(keys); _navNextRepeat[nav] = now + NavRepeatDelayMs; }
-            else if (repeats && now >= next) { KeyInput.Press(keys); _navNextRepeat[nav] = now + NavRepeatMs; }
+            if (!_navNextRepeat.TryGetValue(nav, out var next)) { SendNav(nav, keys); _navNextRepeat[nav] = now + NavRepeatDelayMs; }
+            else if (repeats && now >= next) { SendNav(nav, keys); _navNextRepeat[nav] = now + NavRepeatMs; }
         }
     }
+
+    void SendNav(MenuNav nav, ushort[] keys)
+    {
+        uint sent = KeyInput.Press(keys);
+        SetStatus(sent == keys.Length * 2 ? $"Game Bar: {nav}" : $"Game Bar: {nav} wasn't delivered (Windows blocked the key press).", sent != keys.Length * 2);
+    }
+    bool _gameBarProblemShown;
 
     /// <summary>Whether a binding's control is held now (or was tapped since the last poll).</summary>
     bool IsHeld(Binding b)
