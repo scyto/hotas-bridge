@@ -24,6 +24,10 @@ public interface IGameAdapter
     /// <summary>Devices the game's own config already knows about (product GUID → name).</summary>
     IReadOnlyDictionary<Guid, string> KnownDevices();
 
+    /// <summary>What Install would change in the game's file right now, one line per setting; empty when the file already
+    /// matches the profile. Compares values, not text, so a game rewriting the file in its own layout isn't a change.</summary>
+    IReadOnlyList<string> Differences(GameProfile profile);
+
     /// <summary>Writes bindings, backing up first. Returns the backup file name.</summary>
     string Install(GameProfile profile);
     IReadOnlyList<string> Backups();

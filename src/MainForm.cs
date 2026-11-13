@@ -5,7 +5,10 @@ namespace HotasBridge;
 sealed class MainForm : Form
 {
     readonly ComboBox _game = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 260 };
-    readonly Label _path = new() { AutoSize = true, ForeColor = Theme.Dim, Font = Theme.Mono };
+    readonly Label _path = new() { AutoSize = true, ForeColor = Theme.Dim, Font = Theme.Mono, Margin = new Padding(0, 3, 0, 0) };
+    readonly Label _sync = new() { AutoSize = true, Font = Theme.Ui, Margin = new Padding(16, 0, 0, 0), UseMnemonic = false }; // file vs bindings
+    readonly ToolTip _tip = new() { AutoPopDelay = 30000 };
+    readonly System.Windows.Forms.Timer _syncTimer = new() { Interval = 2000 }; // the game rewrites the file when it exits
     readonly FlowLayoutPanel _devices = new() { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true, Padding = new Padding(12), BackColor = Theme.Panel };
     readonly DataGridView _grid = new();
     readonly ToolStripStatusLabel _status = new() { Spring = true, TextAlign = ContentAlignment.MiddleLeft };
@@ -49,8 +52,8 @@ sealed class MainForm : Form
         btnRefresh.Click += (_, _) => { _di?.Refresh(); SyncBindingTypes(); RebuildDevices(); RefreshGrid(); };
         top.Controls.AddRange(new Control[] { title, _game, btnPreset, btnInstall, btnRestore, btnPreview, btnFolder, btnRefresh });
 
-        var pathBar = new Panel { Dock = DockStyle.Top, Height = 22, Padding = new Padding(14, 0, 0, 0), BackColor = Theme.Bg };
-        _path.Location = new Point(14, 2); pathBar.Controls.Add(_path);
+        var pathBar = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 26, Padding = new Padding(14, 0, 0, 0), BackColor = Theme.Bg, WrapContents = false };
+        pathBar.Controls.Add(_path); pathBar.Controls.Add(_sync);
 
         // ---- grid ----
         SetupGrid();
@@ -83,8 +86,10 @@ sealed class MainForm : Form
             RebuildDevices(); LoadGame();
             _timer.Tick += (_, _) => Tick();
             _timer.Start();
+            _syncTimer.Tick += (_, _) => UpdateSync();
+            _syncTimer.Start();
         };
-        FormClosed += (_, _) => { _timer.Stop(); _di?.Dispose(); };
+        FormClosed += (_, _) => { _timer.Stop(); _syncTimer.Stop(); _di?.Dispose(); };
     }
 
     static Button MakeButton(string text, bool primary) => new()
@@ -204,8 +209,15 @@ sealed class MainForm : Form
         _listenKey = key;
         _baseline = new();
         if (_di != null) foreach (var d in _di.Devices) _baseline[d.Info.InstanceGuid] = Snap(d.State);
-        SetStatus($"Listening for {key}… press a button, push a hat or sweep an axis. Click Press… or Esc to cancel.");
+        var a = _adapter.Actions.First(x => x.Key == key);
+        var what = a.Kind == ActionKind.Button ? "press a button or push a hat" : a.Gesture ?? "move the axis you want";
+        SetStatus($"Listening for {key}: {what}. Click Press… or Esc to cancel.");
     }
+
+    /// <summary>An axis binding for a movement from <paramref name="from"/> to <paramref name="to"/> (-1..1). If the action has
+    /// a gesture, the user made that movement, and the game reads it as positive: invert when the device reported it as negative.</summary>
+    internal static InputRef AxisBinding(GameAction a, int axis, float from, float to) =>
+        new(InputKind.Axis, axis, '\0', a.Gesture != null && to < from);
 
     static (float[], int[], bool[]) Snap(DeviceState s) => ((float[])s.Axes.Clone(), (int[])s.Pov.Clone(), (bool[])s.Buttons.Clone());
 
@@ -223,6 +235,13 @@ sealed class MainForm : Form
         {
             var s = d.State;
             if (!_baseline.TryGetValue(d.Info.InstanceGuid, out var b)) { _baseline[d.Info.InstanceGuid] = Snap(s); continue; }
+            if (action.Kind == ActionKind.Axis)
+            {
+                // axes only: a throttle presses detent buttons as its lever moves, which must not win
+                for (int i = 0; i < 8; i++)
+                    if (s.AxisPresent[i] && Math.Abs(s.Axes[i] - b.axes[i]) > 0.5f && Bind(d, AxisBinding(action, i, b.axes[i], s.Axes[i]))) return;
+                continue;
+            }
             // buttons: buffered presses catch short pulses (e.g. wheels in button mode)
             foreach (var i in s.Pressed.Concat(Enumerable.Range(0, s.ButtonCount).Where(i => s.Buttons[i] && !b.btn[i])))
             {
@@ -234,15 +253,6 @@ sealed class MainForm : Form
             {
                 char dir = DirectInputService.PovDir(s.Pov[h]);
                 if (dir != '\0' && s.Pov[h] != b.pov[h] && Bind(d, new InputRef(InputKind.Pov, h, dir))) return;
-            }
-            for (int i = 0; i < 8; i++)
-            {
-                if (!s.AxisPresent[i]) continue;
-                if (Math.Abs(s.Axes[i] - b.axes[i]) > 0.5f)
-                {
-                    bool inv = action.Key == "Flight_Pitch" && i == 1; // AC7 convention: pull back = nose up
-                    if (Bind(d, new InputRef(InputKind.Axis, i, '\0', inv))) return;
-                }
             }
         }
     }
@@ -256,7 +266,10 @@ sealed class MainForm : Form
         var key = _listenKey!; _listenKey = null;
         _profile.Bindings[key] = new Binding { DeviceProduct = d.Info.ProductGuid, DeviceName = d.Info.ProductName, DeviceType = d.Info.DeviceType, Input = input };
         SaveProfile(); RefreshGrid();
-        SetStatus($"{key} = {_adapter.Format(input)} on {d.Info.ProductName}");
+        var gesture = _adapter.Actions.First(x => x.Key == key).Gesture;
+        SetStatus($"{key} = {_adapter.Format(input)} on {d.Info.ProductName}" +
+                  (input.Invert && gesture != null ? " (inverted: this device reports that movement backwards). If it's the wrong way round, click ⇅." :
+                   gesture != null ? ". If it's the wrong way round, click ⇅." : ""));
         return true;
     }
 
@@ -317,9 +330,45 @@ sealed class MainForm : Form
         _di?.Refresh(); // DirectInput re-reads the setting on every enumeration
         SyncBindingTypes(); RebuildDevices(); RefreshGrid();
         var now = _di?.Devices.FirstOrDefault(x => x.Info.ProductGuid == d.ProductGuid)?.Info.DeviceType ?? "?";
-        bool running = _adapter.ProcessName != null && Process.GetProcessesByName(_adapter.ProcessName).Length > 0;
         SetStatus($"{d.ProductName} now reports as {now}. " +
-                  (running ? $"Restart {GameShortName} so it notices." : "Games pick this up the next time they start."));
+                  (GameRunning ? $"Restart {GameShortName} so it notices." : "Games pick this up the next time they start."));
+    }
+
+    bool GameRunning
+    {
+        get
+        {
+            if (_adapter.ProcessName == null) return false;
+            var ps = Process.GetProcessesByName(_adapter.ProcessName);
+            foreach (var p in ps) p.Dispose();
+            return ps.Length > 0;
+        }
+    }
+
+    // ---------- does the game's file match the bindings? ----------
+    void UpdateSync()
+    {
+        string text; Color color; string tip;
+        IReadOnlyList<string> diffs;
+        try { diffs = _profile.Bindings.Count == 0 ? Array.Empty<string>() : _adapter.Differences(_profile); }
+        catch { return; } // e.g. the game is writing the file right now; try again next time
+        if (_profile.Bindings.Count == 0) { text = ""; color = Theme.Dim; tip = ""; }
+        else if (diffs.Count == 0)
+        {
+            text = "✓ matches your bindings"; color = Theme.Green;
+            tip = $"{Path.GetFileName(_adapter.ConfigPath)} already has everything in the grid.";
+        }
+        else
+        {
+            text = $"● {diffs.Count} change{(diffs.Count == 1 ? "" : "s")} not written yet: " +
+                   (GameRunning ? $"close {GameShortName}, then Back up & overwrite" : "click Back up & overwrite");
+            color = Theme.Amber;
+            tip = $"What Back up & overwrite would change in {Path.GetFileName(_adapter.ConfigPath)}:\n" +
+                  string.Join("\n", diffs.Take(25)) + (diffs.Count > 25 ? $"\n… and {diffs.Count - 25} more" : "");
+        }
+        if (_sync.Text != text) _sync.Text = text;
+        _sync.ForeColor = color;
+        if (_tip.GetToolTip(_sync) != tip) _tip.SetToolTip(_sync, tip);
     }
 
     /// <summary>Keeps each binding's device type in step with what the device reports now (it can be changed).</summary>
@@ -349,11 +398,15 @@ sealed class MainForm : Form
         _profile = ProfileStore.Load(_adapter.Id);
         SyncBindingTypes(); // older profiles have no device type, and a device's type can be changed
         _path.Text = _adapter.ConfigPath + (File.Exists(_adapter.ConfigPath) ? "" : "   (not found: run the game once with your devices connected)");
-        RefreshGrid(); RebuildDevices();
+        RefreshGrid(); RebuildDevices(); UpdateSync();
         SetStatus($"{_adapter.Name}: {_profile.Bindings.Count} bindings loaded.");
     }
 
-    void SaveProfile() { try { ProfileStore.Save(_profile); } catch (Exception ex) { SetStatus("Couldn't save profile: " + ex.Message, true); } }
+    void SaveProfile()
+    {
+        try { ProfileStore.Save(_profile); } catch (Exception ex) { SetStatus("Couldn't save profile: " + ex.Message, true); }
+        UpdateSync();
+    }
 
     void BuildPresetMenu(ContextMenuStrip m)
     {
@@ -386,7 +439,7 @@ sealed class MainForm : Form
             item.Click += (_, _) =>
             {
                 if (MessageBox.Show(this, $"Restore {Path.GetFileName(f)}?\n\nYour current file is backed up first.", "Restore", MessageBoxButtons.OKCancel) != DialogResult.OK) return;
-                try { _adapter.Restore(f); SetStatus($"Restored {Path.GetFileName(f)}."); RebuildDevices(); }
+                try { _adapter.Restore(f); SetStatus($"Restored {Path.GetFileName(f)}."); RebuildDevices(); UpdateSync(); }
                 catch (Exception ex) { SetStatus("Restore failed: " + ex.Message, true); }
             };
             m.Items.Add(item);
@@ -397,8 +450,10 @@ sealed class MainForm : Form
     void Install()
     {
         if (_profile.Bindings.Count == 0) { SetStatus("Nothing to install yet. Detect some bindings or load a preset.", true); return; }
-        if (_adapter.ProcessName != null && Process.GetProcessesByName(_adapter.ProcessName).Length > 0 &&
-            MessageBox.Show(this, $"{_adapter.Name} is running. It may overwrite the file when it exits.\n\nWrite anyway?", "Game is running", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+        if (GameRunning &&
+            MessageBox.Show(this, $"{_adapter.Name} is running.\n\nIt rewrites {Path.GetFileName(_adapter.ConfigPath)} when it exits, from the copy it loaded at startup, " +
+                                  "so anything written now is undone when you quit. Close the game first.\n\nWrite anyway?",
+                            "Game is running", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
             return;
         try
         {
@@ -406,7 +461,7 @@ sealed class MainForm : Form
             var ignored = _profile.Bindings.Values.Where(b => _adapter.UnsupportedDevice(b.DeviceType, b.DeviceName) != null).ToList();
             var skipped = ignored.Count == 0 ? "" : $"Skipped {ignored.Count} on {string.Join(", ", ignored.Select(b => b.DeviceName).Distinct())} (the game ignores it). ";
             SetStatus($"Installed {_profile.Bindings.Count - ignored.Count} bindings. " + skipped + (backup.Length > 0 ? $"Backup: {Path.GetFileName(backup)}" : "(no previous file to back up)"));
-            RebuildDevices();
+            RebuildDevices(); UpdateSync();
         }
         catch (Exception ex) { SetStatus("Install failed: " + ex.Message, true); }
     }

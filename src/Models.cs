@@ -42,7 +42,9 @@ public sealed class Binding
 
 public enum ActionKind { Axis, Button }
 
-public sealed record GameAction(string Key, string Group, string Description, ActionKind Kind);
+/// <param name="Gesture">For axes: the movement Detect asks for, which the game reads as positive (e.g. "push the throttle
+/// forward"). Detect sets Invert when the device reports that movement as negative. Null = no known convention.</param>
+public sealed record GameAction(string Key, string Group, string Description, ActionKind Kind, string? Gesture = null);
 
 /// <summary>A preset: bindings for one device model (by product GUID) in one game.</summary>
 public sealed record Preset(string Name, string GameId, Guid DeviceProduct, string DeviceName, IReadOnlyDictionary<string, InputRef> Map);

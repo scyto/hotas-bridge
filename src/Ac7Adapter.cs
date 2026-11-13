@@ -10,6 +10,7 @@ namespace HotasBridge;
 /// AC7 only enumerates DirectInput devices of type Joystick, Flight and 1stPerson (the EnableDevice* switches in
 /// [JoystickSetting]); there is no gamepad switch. Devices that report as Gamepad, such as the VelocityOne Rudder,
 /// are ignored, so a section written for them never takes effect.
+/// AC7 rewrites Input.ini when it exits, from what it loaded at startup, so a file written while it runs is undone.
 /// </summary>
 public sealed class Ac7Adapter : IGameAdapter
 {
@@ -20,12 +21,15 @@ public sealed class Ac7Adapter : IGameAdapter
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "BANDAI NAMCO Entertainment", "ACE COMBAT 7", "Config", "Input.ini");
 
+    // Gestures: AC7 reads forward and right as positive. Measured: the Flightdeck Stick needs Y:R for pitch (it reports
+    // forward as negative, like most sticks), and the Flightdeck Throttle needs X:R so that forward is faster.
+    // Camera axes have no gesture: their direction hasn't been checked in-game.
     public IReadOnlyList<GameAction> Actions { get; } = new GameAction[]
     {
-        new("Flight_Pitch", "Flight", "Pitch", ActionKind.Axis),
-        new("Flight_Roll", "Flight", "Roll", ActionKind.Axis),
-        new("Flight_Yaw", "Flight", "Yaw (pedals / twist)", ActionKind.Axis),
-        new("Flight_Throttle", "Flight", "Throttle (centre = cruise)", ActionKind.Axis),
+        new("Flight_Pitch", "Flight", "Pitch", ActionKind.Axis, "push the stick forward"),
+        new("Flight_Roll", "Flight", "Roll", ActionKind.Axis, "move the stick right"),
+        new("Flight_Yaw", "Flight", "Yaw (pedals / twist)", ActionKind.Axis, "push the right pedal (or twist the stick right)"),
+        new("Flight_Throttle", "Flight", "Throttle (centre = cruise)", ActionKind.Axis, "push the throttle forward, starting from the back"),
         new("Flight_Gun", "Flight", "Fire gun", ActionKind.Button),
         new("Flight_Missile", "Flight", "Fire missile / special", ActionKind.Button),
         new("Flight_Weapon", "Flight", "Toggle missile / special", ActionKind.Button),
@@ -48,12 +52,26 @@ public sealed class Ac7Adapter : IGameAdapter
         new("UI_Y", "Menus", "Y", ActionKind.Button),
         new("UI_LB", "Menus", "LB (prev tab)", ActionKind.Button),
         new("UI_RB", "Menus", "RB (next tab)", ActionKind.Button),
+        new("UI_LT", "Menus", "LT", ActionKind.Button),
+        new("UI_RT", "Menus", "RT", ActionKind.Button),
         new("UI_Menu", "Menus", "Menu / pause", ActionKind.Button),
         new("UI_LeftStickUp", "Menus", "Menu up", ActionKind.Button),
         new("UI_LeftStickDown", "Menus", "Menu down", ActionKind.Button),
         new("UI_LeftStickLeft", "Menus", "Menu left", ActionKind.Button),
         new("UI_LeftStickRight", "Menus", "Menu right", ActionKind.Button),
+        new("UI_LeftStickPress", "Menus", "Left stick click", ActionKind.Button),
+        new("UI_RightStickUp", "Menus", "Right stick up", ActionKind.Button),
+        new("UI_RightStickDown", "Menus", "Right stick down", ActionKind.Button),
+        new("UI_RightStickLeft", "Menus", "Right stick left", ActionKind.Button),
+        new("UI_RightStickRight", "Menus", "Right stick right", ActionKind.Button),
+        new("UI_RightStickPress", "Menus", "Right stick click", ActionKind.Button),
+        new("UI_DPadUp", "Menus", "D-pad up", ActionKind.Button),
+        new("UI_DPadDown", "Menus", "D-pad down", ActionKind.Button),
+        new("UI_DPadLeft", "Menus", "D-pad left", ActionKind.Button),
+        new("UI_DPadRight", "Menus", "D-pad right", ActionKind.Button),
     };
+
+    static readonly string[] EnableKeys = { "EnableJoystick", "EnableDeviceJoystick", "EnableDeviceFlight", "EnableDevice1stPerson" };
 
     public string? Unsupported(InputRef i) => i.Kind switch
     {
@@ -121,7 +139,7 @@ public sealed class Ac7Adapter : IGameAdapter
 
         var js = secs.FirstOrDefault(s => string.Equals(s.Header, "JoystickSetting", StringComparison.OrdinalIgnoreCase));
         if (js == null) { js = new Section { Header = "JoystickSetting" }; secs.Insert(Math.Min(1, secs.Count), js); }
-        foreach (var k in new[] { "EnableJoystick", "EnableDeviceJoystick", "EnableDeviceFlight", "EnableDevice1stPerson" })
+        foreach (var k in EnableKeys)
         {
             int i = js.Lines.FindIndex(l => KeyOf(l).Equals(k, StringComparison.OrdinalIgnoreCase));
             if (i >= 0) js.Lines[i] = $"{k}=True"; else js.Lines.Insert(0, $"{k}=True");
@@ -162,6 +180,49 @@ public sealed class Ac7Adapter : IGameAdapter
         var outText = sb.ToString();
         while (outText.Contains("\r\n\r\n\r\n")) outText = outText.Replace("\r\n\r\n\r\n", "\r\n\r\n");
         return outText.TrimStart('\r', '\n');
+    }
+
+    public IReadOnlyList<string> Differences(GameProfile profile)
+    {
+        // AC7 rewrites Input.ini when it exits, in its own layout (it adds an empty key for every action it knows), so
+        // compare the values we manage rather than the text.
+        string now = ReadCurrent(), want = Preview(profile);
+        var (have, haveNames) = Managed(now);
+        var (will, willNames) = Managed(want);
+        var diffs = new List<string>();
+        foreach (var k in will.Keys.Union(have.Keys).OrderBy(k => k.Section).ThenBy(k => ActionOrder(k.Key)))
+        {
+            have.TryGetValue(k, out var a); will.TryGetValue(k, out var b);
+            if (a == b) continue;
+            string where = k.Section.Equals("JoystickSetting", StringComparison.OrdinalIgnoreCase) ? "[JoystickSetting]"
+                : willNames.GetValueOrDefault(k.Section) ?? haveNames.GetValueOrDefault(k.Section) ?? k.Section;
+            diffs.Add($"{k.Key} on {where}: {a ?? "not set"} → {b ?? "removed"}");
+        }
+        return diffs;
+    }
+
+    int ActionOrder(string key) { int i = Actions.ToList().FindIndex(a => a.Key == key); return i < 0 ? -1 : i; }
+
+    /// <summary>Non-empty values of the keys we write (bindings and the EnableDevice switches), keyed by section and key.</summary>
+    (Dictionary<(string Section, string Key), string> Values, Dictionary<string, string> Names) Managed(string text)
+    {
+        var keys = new HashSet<string>(Actions.Select(a => a.Key).Concat(EnableKeys), StringComparer.OrdinalIgnoreCase);
+        var values = new Dictionary<(string, string), string>();
+        var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var s in Parse(text))
+        {
+            if (s.Header == null) continue;
+            bool joystick = s.Header.StartsWith("Joystick-", StringComparison.OrdinalIgnoreCase);
+            if (!joystick && !s.Header.Equals("JoystickSetting", StringComparison.OrdinalIgnoreCase)) continue;
+            var sec = s.Header.ToUpperInvariant();
+            foreach (var l in s.Lines)
+            {
+                var k = KeyOf(l); var v = ValOf(l);
+                if (joystick && k.Equals("ProductName", StringComparison.OrdinalIgnoreCase)) names[sec] = v;
+                else if (v.Length > 0 && keys.TryGetValue(k, out var canon)) values[(sec, canon)] = v;
+            }
+        }
+        return (values, names);
     }
 
     public string Install(GameProfile profile)
