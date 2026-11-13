@@ -371,13 +371,15 @@ sealed class MainForm : Form
             var known = SafeKnown();
             foreach (var d in _di.Devices)
             {
-                bool ignored = _adapter.UnsupportedDevice(d.Info.DeviceType, d.Info.ProductName) != null;
+                bool xinput = d.Info.IsXInput; // the game reads it through XInput: its DirectInput type is irrelevant
+                bool ignored = !xinput && _adapter.UnsupportedDevice(d.Info.DeviceType, d.Info.ProductName) != null;
                 var v = new DeviceView(d) { Width = CardWidth, Warn = ignored, Overridden = DeviceTypeOverride.Get(d.Info) != ReportAs.Original,
                                             ButtonLimit = _adapter.MaxButtons, LimitLabel = $"{GameShortName} reads 1–{_adapter.MaxButtons}" };
                 if (d.State.ButtonCount > _adapter.MaxButtons)
                     _tip.SetToolTip(v, $"Greyed buttons ({_adapter.MaxButtons + 1} and up) still work, but {GameShortName} only reads buttons 1–{_adapter.MaxButtons}. " +
                                        "System buttons (Guide, Share) can use any button, because HOTAS Bridge reads them itself.");
-                if (ignored) v.Note = $"{GameShortName} ignores {d.Info.DeviceType} devices. Click {d.Info.DeviceType} ▾ to change it.";
+                if (xinput) v.Note = "Xbox controller: games read it directly (XInput). Nothing to set up here.";
+                else if (ignored) v.Note = $"{GameShortName} ignores {d.Info.DeviceType} devices. Click {d.Info.DeviceType} ▾ to change it.";
                 else if (!known.ContainsKey(d.Info.ProductGuid)) v.Note = "Not in the game's config yet. A section will be created on install.";
                 v.TypeClicked += (_, _) => ShowTypeMenu(v);
                 _devices.Controls.Add(v);
@@ -510,11 +512,13 @@ sealed class MainForm : Form
     // the Game Bar too, the way a pad does: Left/Right move along the widget bar (each widget opens as you land on it),
     // Down goes into the widget and down through it. With keys, only the widget bar answers the arrow keys; inside a
     // widget, moving between items is Tab / Shift+Tab, so Up/Down send those. Directions repeat while held.
+    // Back isn't mapped: the only key for it is Esc, which closes the whole Game Bar (a pad's B only steps back), and the
+    // Flightdeck pinkie lever presses B partway through its pull, so it closed by accident. Guide closes the Game Bar instead.
     static readonly Dictionary<MenuNav, ushort[]> NavKeys = new()
     {
         [MenuNav.Up] = new[] { KeyInput.Shift, KeyInput.Tab }, [MenuNav.Down] = new[] { KeyInput.Tab },
         [MenuNav.Left] = new[] { KeyInput.Left }, [MenuNav.Right] = new[] { KeyInput.Right },
-        [MenuNav.Confirm] = new[] { KeyInput.Enter }, [MenuNav.Back] = new[] { KeyInput.Escape },
+        [MenuNav.Confirm] = new[] { KeyInput.Enter },
         [MenuNav.Prev] = new[] { KeyInput.Left }, [MenuNav.Next] = new[] { KeyInput.Right }, // previous / next widget
     };
     const long NavRepeatDelayMs = 400, NavRepeatMs = 110, GameBarCheckMs = 100;
@@ -536,7 +540,7 @@ sealed class MainForm : Form
         if (open == _gameBarOpen) return;
         if (!open) _ignoreDirectInputUntil = now + ReplayGuardMs;
         _gameBarOpen = open;
-        SetStatus(open ? "Game Bar open: your menu buttons drive it (arrows, Enter, Esc, Tab)." : "Game Bar closed.");
+        SetStatus(open ? "Game Bar open: your menu buttons drive it (left/right, up/down, A to select; Guide closes it)." : "Game Bar closed.");
     }
     const long ReplayGuardMs = 1500;
     long _ignoreDirectInputUntil;

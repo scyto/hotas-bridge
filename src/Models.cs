@@ -26,6 +26,9 @@ public sealed record DeviceInfo(Guid InstanceGuid, Guid ProductGuid, string Prod
     public ushort Vid => (ushort)(BitConverter.ToUInt32(ProductGuid.ToByteArray(), 0) & 0xFFFF);
     public ushort Pid => (ushort)(BitConverter.ToUInt32(ProductGuid.ToByteArray(), 0) >> 16);
     public string VidPid => $"{Vid:X4}:{Pid:X4}";
+    /// <summary>An Xbox-style controller (Windows names them "...XINPUT compatible input device", "Controller (Xbox ...)").
+    /// Games read these through XInput, not DirectInput, so their DirectInput type doesn't matter and there's nothing to set up.</summary>
+    public bool IsXInput => ProductName.Contains("XINPUT", StringComparison.OrdinalIgnoreCase) || ProductName.Contains("Xbox", StringComparison.OrdinalIgnoreCase);
 }
 
 /// <summary>One bound action: which device (by product GUID) and which input.</summary>
