@@ -11,6 +11,8 @@ sealed class MainForm : Form
     readonly System.Windows.Forms.Timer _syncTimer = new() { Interval = 2000 }; // the game rewrites the file when it exits
     readonly FlowLayoutPanel _devices = new() { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true, Padding = new Padding(12), BackColor = Theme.Panel };
     readonly DataGridView _grid = new();
+    readonly FlowLayoutPanel _tabs = new() { Dock = DockStyle.Top, AutoSize = true, WrapContents = true, BackColor = Theme.Panel, Padding = new Padding(0, 0, 0, 8) };
+    string _tab = ""; // the action group shown in the grid
     readonly ToolStripStatusLabel _status = new() { Spring = true, TextAlign = ContentAlignment.MiddleLeft };
     readonly System.Windows.Forms.Timer _timer = new() { Interval = 15 };
     readonly AppSettings _settings;
@@ -20,6 +22,7 @@ sealed class MainForm : Form
     readonly ContextMenuStrip _presetMenu = new(), _restoreMenu = new(), _textMenu = new() { ShowCheckMargin = true, ShowImageMargin = false };
     Button _btnInstall = null!;
     DirectInputService? _di;
+    RawHidInput? _raw; // buttons and hats while the Game Bar has paused DirectInput
     IGameAdapter _adapter = GameRegistry.All[0];
     GameProfile _profile = new();
 
@@ -67,7 +70,7 @@ sealed class MainForm : Form
         // SplitterDistance is set in Load: here the container still has its default ~150px width and WinForms clamps it
         _split.Panel1.Controls.Add(_devices);
         var right = new Panel { Dock = DockStyle.Fill, Padding = new Padding(12), BackColor = Theme.Panel };
-        right.Controls.Add(_grid);
+        right.Controls.Add(_grid); right.Controls.Add(_tabs); // the tab strip docks above the grid
         _split.Panel2.Controls.Add(right);
 
         _strip.Items.Add(_status);
@@ -88,13 +91,14 @@ sealed class MainForm : Form
             ApplyGridMetrics();
             try { _di = new DirectInputService(Handle); }
             catch (Exception ex) { SetStatus("DirectInput failed to start: " + ex.Message, true); }
+            try { _raw = new RawHidInput(); } catch { } // only needed while the Game Bar is open
             RebuildDevices(); LoadGame();
             _timer.Tick += (_, _) => Tick();
             _timer.Start();
             _syncTimer.Tick += (_, _) => UpdateSync();
             _syncTimer.Start();
         };
-        FormClosed += (_, _) => { _timer.Stop(); _syncTimer.Stop(); _di?.Dispose(); };
+        FormClosed += (_, _) => { _timer.Stop(); _syncTimer.Stop(); _di?.Dispose(); _raw?.Dispose(); };
     }
 
     static Button MakeButton(string text, bool primary) => new()
@@ -157,7 +161,8 @@ sealed class MainForm : Form
         // assign new styles: DataGridView's DefaultCellStyle getter can return a temporary copy, so setting .Font on it does nothing
         _grid.ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle(_grid.ColumnHeadersDefaultCellStyle) { Font = Theme.UiBold };
         _grid.DefaultCellStyle = new DataGridViewCellStyle(_grid.DefaultCellStyle) { Font = Theme.Ui };
-        foreach (var name in new[] { "Action", "Input" })
+        StyleTabs();
+        foreach (var name in new[] { "Key", "Input" })
             _grid.Columns[name].DefaultCellStyle = new DataGridViewCellStyle(_grid.Columns[name].DefaultCellStyle) { Font = Theme.Mono };
     }
 
@@ -171,10 +176,11 @@ sealed class MainForm : Form
         g.ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle { BackColor = Theme.Panel2, ForeColor = Theme.Amber, Font = Theme.UiBold, SelectionBackColor = Theme.Panel2 };
         g.DefaultCellStyle = new DataGridViewCellStyle { BackColor = Theme.Panel, ForeColor = Theme.Text, SelectionBackColor = Color.FromArgb(60, 45, 20), SelectionForeColor = Theme.Text, Font = Theme.Ui };
         g.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill; // row heights: ApplyGridMetrics
-        g.Columns.Add(new DataGridViewTextBoxColumn { Name = "Action", HeaderText = "Action", ReadOnly = true, FillWeight = 24, DefaultCellStyle = { Font = Theme.Mono } });
-        g.Columns.Add(new DataGridViewTextBoxColumn { Name = "Desc", HeaderText = "What it does", ReadOnly = true, FillWeight = 22, DefaultCellStyle = { ForeColor = Theme.Dim } });
-        g.Columns.Add(new DataGridViewTextBoxColumn { Name = "Device", HeaderText = "Device", ReadOnly = true, FillWeight = 20 });
-        g.Columns.Add(new DataGridViewTextBoxColumn { Name = "Input", HeaderText = "Binding (editable)", FillWeight = 18, DefaultCellStyle = { Font = Theme.Mono } });
+        g.Columns.Add(new DataGridViewTextBoxColumn { Name = "Desc", HeaderText = "Action", ReadOnly = true, FillWeight = 26 });
+        g.Columns.Add(new DataGridViewTextBoxColumn { Name = "Device", HeaderText = "Device", ReadOnly = true, FillWeight = 19 });
+        g.Columns.Add(new DataGridViewTextBoxColumn { Name = "Input", HeaderText = "Binding (editable)", FillWeight = 17, DefaultCellStyle = { Font = Theme.Mono } });
+        g.Columns.Add(new DataGridViewTextBoxColumn { Name = "Key", HeaderText = "INI file", ReadOnly = true, FillWeight = 23, DefaultCellStyle = { Font = Theme.Mono, ForeColor = Theme.Dim },
+                                                      ToolTipText = "The setting's name in the game's file (n/a: HOTAS Bridge handles it itself)" });
         g.Columns.Add(new DataGridViewButtonColumn { Name = "Detect", HeaderText = "Detect", ToolTipText = "Click, then press a button, push a hat or move an axis to bind it", UseColumnTextForButtonValue = false, FillWeight = 9, FlatStyle = FlatStyle.Flat });
         g.Columns.Add(new DataGridViewButtonColumn { Name = "Inv", HeaderText = "Invert", ToolTipText = "Flip an axis's direction (AC7 writes it as :R)", FillWeight = 7, FlatStyle = FlatStyle.Flat });
         g.Columns.Add(new DataGridViewButtonColumn { Name = "Clear", HeaderText = "Clear", ToolTipText = "Remove the binding", FillWeight = 6, FlatStyle = FlatStyle.Flat });
@@ -202,29 +208,25 @@ sealed class MainForm : Form
     void RefreshGrid()
     {
         _grid.Rows.Clear();
-        string? group = null;
-        foreach (var a in GridActions)
+        foreach (var a in GridActions.Where(a => a.Group == _tab))
         {
-            if (a.Group != group)
-            {
-                group = a.Group;
-                int hr = _grid.Rows.Add(a.Group.ToUpperInvariant(), "", "", "", "", "", "");
-                var row = _grid.Rows[hr]; row.Tag = null; row.ReadOnly = true;
-                row.DefaultCellStyle = new DataGridViewCellStyle { BackColor = Theme.Bg, ForeColor = Theme.Amber, Font = Theme.UiBold, SelectionBackColor = Theme.Bg };
-                foreach (var col in new[] { "Detect", "Inv", "Clear" }) row.Cells[col] = new DataGridViewTextBoxCell { Value = "" }; // no buttons on group rows
-            }
             bool sys = a.Group == SystemButtons.Group;
             var b = sys ? SystemBindingFor(a) : _profile.Bindings.GetValueOrDefault(a.Key);
             string inputText = b == null ? "" : sys ? $"Button{b.Input!.Index + 1}" : (b.Raw ?? (b.Input != null ? _adapter.Format(b.Input) ?? "(unsupported)" : ""));
             if (b != null && !sys && _adapter.UnsupportedDevice(b.DeviceType, b.DeviceName) != null) inputText = "(device ignored by game) " + inputText;
             bool listening = _listenKey == a.Key;
             bool inverted = b?.Raw == null && b?.Input is { Kind: InputKind.Axis, Invert: true };
-            int r = _grid.Rows.Add(a.Key, a.Description + (a.Kind == ActionKind.Axis ? "  ·axis" : ""), b?.DeviceName ?? "",
-                listening ? "waiting for input…" : inputText, listening ? "Press…" : "Detect", inverted ? "⇅ on" : "⇅", "×");
-            var gr = _grid.Rows[r];
+            var gr = _grid.Rows[_grid.Rows.Add()];
             gr.Tag = a;
-            if (sys) { gr.Cells["Input"].ReadOnly = true; gr.Cells["Action"].ToolTipText = gr.Cells["Desc"].ToolTipText = SystemButtons.Tip(a); }
-            if (listening) gr.DefaultCellStyle.BackColor = Color.FromArgb(60, 42, 12);
+            gr.Cells["Desc"].Value = a.Description + (a.Kind == ActionKind.Axis ? "  ·axis" : "");
+            gr.Cells["Device"].Value = b?.DeviceName ?? "";
+            gr.Cells["Input"].Value = listening ? "waiting for input…" : inputText;
+            gr.Cells["Key"].Value = sys ? "n/a" : a.Key;
+            gr.Cells["Detect"].Value = listening ? "Press…" : "Detect";
+            gr.Cells["Inv"].Value = inverted ? "⇅ on" : "⇅";
+            gr.Cells["Clear"].Value = "×";
+            if (sys) { gr.Cells["Input"].ReadOnly = true; gr.Cells["Desc"].ToolTipText = gr.Cells["Key"].ToolTipText = SystemButtons.Tip(a); }
+            if (listening) { gr.DefaultCellStyle.BackColor = Color.FromArgb(60, 42, 12); gr.Cells["Input"].ReadOnly = true; }
             if (a.Kind != ActionKind.Axis) gr.Cells["Inv"] = new DataGridViewTextBoxCell { Value = "" }; // only axes can be inverted
             else
             {
@@ -233,6 +235,36 @@ sealed class MainForm : Form
                 if (inverted) inv.Style = new DataGridViewCellStyle(inv.InheritedStyle) { ForeColor = Theme.Amber, Font = Theme.UiBold };
             }
             if (b == null) gr.Cells["Clear"] = new DataGridViewTextBoxCell { Value = "" }; // nothing to clear
+        }
+    }
+
+    // ---------- tabs: one per action group (the game's, e.g. Flight / Menus, then System) ----------
+    void RebuildTabs()
+    {
+        var groups = GridActions.Select(a => a.Group).Distinct().ToList();
+        if (!groups.Contains(_tab)) _tab = groups.FirstOrDefault() ?? "";
+        _tabs.SuspendLayout();
+        foreach (var c in _tabs.Controls.Cast<Control>().ToList()) c.Dispose();
+        foreach (var group in groups)
+        {
+            var t = MakeButton(group, false);
+            t.Margin = new Padding(0, 0, 6, 0); t.Tag = group;
+            t.Click += (_, _) => { _tab = group; StyleTabs(); RefreshGrid(); };
+            _tabs.Controls.Add(t);
+        }
+        StyleTabs();
+        _tabs.ResumeLayout();
+    }
+
+    void StyleTabs()
+    {
+        foreach (var t in _tabs.Controls.OfType<Button>())
+        {
+            bool on = (string)t.Tag! == _tab;
+            t.BackColor = on ? Theme.Panel2 : Theme.Panel;
+            t.ForeColor = on ? Theme.Amber : Theme.Dim;
+            t.FlatAppearance.BorderColor = on ? Theme.Amber : Theme.Line;
+            t.Font = on ? Theme.UiBold : Theme.Ui;
         }
     }
 
@@ -267,9 +299,16 @@ sealed class MainForm : Form
     void Grid_CellEndEdit(object? sender, DataGridViewCellEventArgs e)
     {
         if (_grid.Rows[e.RowIndex].Tag is not GameAction a || _grid.Columns[e.ColumnIndex].Name != "Input" || a.Group == SystemButtons.Group) return;
+        if (_listenKey == a.Key) { BeginInvoke(new Action(RefreshGrid)); return; } // the cell shows Detect's prompt, not a binding
         var text = (_grid.Rows[e.RowIndex].Cells[e.ColumnIndex].Value as string)?.Trim() ?? "";
         if (text.Length == 0) { _profile.Bindings.Remove(a.Key); }
-        else if (_profile.Bindings.TryGetValue(a.Key, out var b)) { b.Raw = text; }
+        else if (_adapter.CheckRaw(text) is { } why) { SetStatus(why + " Not saved.", true); BeginInvoke(new Action(RefreshGrid)); return; }
+        else if (_profile.Bindings.TryGetValue(a.Key, out var b))
+        {
+            if (_adapter.ParseInput(text) is { } single) { b.Input = single; b.Raw = null; } // a plain control: a normal binding again
+            else b.Raw = text;
+            SetStatus($"{a.Key} = {text}");
+        }
         else { SetStatus("Use Detect first so the binding knows which device it belongs to; then you can edit the text.", true); }
         SaveProfile();
         BeginInvoke(new Action(RefreshGrid));
@@ -344,7 +383,13 @@ sealed class MainForm : Form
         var devWhy = _adapter.UnsupportedDevice(d.Info.DeviceType, d.Info.ProductName);
         if (devWhy != null) { SetStatus(devWhy + $" Click {d.Info.DeviceType} ▾ on its card to change what it reports as.", true); ShowListenNote(devWhy); return false; }
         var why = _adapter.Unsupported(input);
-        if (why != null) { SetStatus(why + " Try another control.", true); ShowListenNote(why); return false; }
+        if (why != null)
+        {
+            bool overLimit = input.Kind == InputKind.Button && input.Index >= _adapter.MaxButtons;
+            SetStatus(why + (overLimit ? " Try another control, or use it as a System button (Guide, Share)." : " Try another control."), true);
+            ShowListenNote(why);
+            return false;
+        }
         var key = _listenKey!; _listenKey = null;
         _profile.Bindings[key] = new Binding { DeviceProduct = d.Info.ProductGuid, DeviceName = d.Info.ProductName, DeviceType = d.Info.DeviceType, Input = input };
         SaveProfile(); RefreshGrid();
@@ -369,13 +414,13 @@ sealed class MainForm : Form
             var known = SafeKnown();
             foreach (var d in _di.Devices)
             {
-                bool ignored = _adapter.UnsupportedDevice(d.Info.DeviceType, d.Info.ProductName) != null;
+                bool xinput = d.Info.IsXInput; // the game reads it through XInput: its DirectInput type is irrelevant
+                bool ignored = !xinput && _adapter.UnsupportedDevice(d.Info.DeviceType, d.Info.ProductName) != null;
                 var v = new DeviceView(d) { Width = CardWidth, Warn = ignored, Overridden = DeviceTypeOverride.Get(d.Info) != ReportAs.Original,
-                                            ButtonLimit = _adapter.MaxButtons, LimitLabel = $"{GameShortName} reads 1–{_adapter.MaxButtons}" };
-                if (d.State.ButtonCount > _adapter.MaxButtons)
-                    _tip.SetToolTip(v, $"Greyed buttons ({_adapter.MaxButtons + 1} and up) still work, but {GameShortName} only reads buttons 1–{_adapter.MaxButtons}. " +
-                                       "System buttons (Guide, Share) can use any button, because HOTAS Bridge reads them itself.");
-                if (ignored) v.Note = $"{GameShortName} ignores {d.Info.DeviceType} devices. Click {d.Info.DeviceType} ▾ to change it.";
+                                            ButtonLimit = _adapter.MaxButtons, GameName = xinput ? null : GameShortName,
+                                            PhysicalButtons = Presets.PhysicalButtons.TryGetValue(d.Info.ProductGuid, out var real) ? real : null };
+                if (xinput) v.Note = "Xbox controller: games read it directly (XInput). Nothing to set up here.";
+                else if (ignored) v.Note = $"{GameShortName} ignores {d.Info.DeviceType} devices. Click {d.Info.DeviceType} ▾ to change it.";
                 else if (!known.ContainsKey(d.Info.ProductGuid)) v.Note = "Not in the game's config yet. A section will be created on install.";
                 v.TypeClicked += (_, _) => ShowTypeMenu(v);
                 _devices.Controls.Add(v);
@@ -476,7 +521,10 @@ sealed class MainForm : Form
     {
         if (_di == null) return;
         _di.PollAll();
+        UpdateGameBarState();
         FireSystemButtons(); // before CheckListen, so the press that Detect binds to Guide doesn't also fire it
+        DriveGameBar();
+        _raw?.ClearPressed();
         CheckListen();
         foreach (Control c in _devices.Controls) c.Invalidate();
     }
@@ -499,10 +547,87 @@ sealed class MainForm : Form
     long? _shareDownAt; // when Share went down (null = up)
     bool _shareHeld;    // this press already saved a clip
 
+    // ---------- Game Bar navigation ----------
+    // The Xbox Game Bar takes Xbox controller, mouse or keyboard input, not a joystick. While it's open, the game's menu
+    // bindings (actions with a Nav role) press keys instead, so the buttons that move around the game's menus move around
+    // the Game Bar too, the way a pad does: Left/Right move along the widget bar (each widget opens as you land on it),
+    // Down goes into the widget and down through it. With keys, only the widget bar answers the arrow keys; inside a
+    // widget, moving between items is Tab / Shift+Tab, so Up/Down send those. Directions repeat while held.
+    // Back is Ctrl+Tab, which steps out of a widget to the widget bar (found by the user), like a pad's B. Not Esc: that closes
+    // the whole Game Bar, and the Flightdeck pinkie lever presses B partway through its pull. Guide closes the Game Bar.
+    static readonly Dictionary<MenuNav, ushort[]> NavKeys = new()
+    {
+        [MenuNav.Up] = new[] { KeyInput.Shift, KeyInput.Tab }, [MenuNav.Down] = new[] { KeyInput.Tab },
+        [MenuNav.Left] = new[] { KeyInput.Left }, [MenuNav.Right] = new[] { KeyInput.Right },
+        [MenuNav.Confirm] = new[] { KeyInput.Enter }, [MenuNav.Back] = new[] { KeyInput.Ctrl, KeyInput.Tab },
+        [MenuNav.Prev] = new[] { KeyInput.Left }, [MenuNav.Next] = new[] { KeyInput.Right }, // previous / next widget
+    };
+    const long NavRepeatDelayMs = 400, NavRepeatMs = 110, GameBarCheckMs = 100;
+    readonly Dictionary<MenuNav, long> _navNextRepeat = new(); // roles held now → when to repeat
+    bool _gameBarOpen;
+    long _gameBarCheckAt;
+
+    /// <summary>Whether the Game Bar is open. While it is, Windows pauses DirectInput for other apps and replays the
+    /// queued presses when it closes (measured), so system buttons and navigation read Raw Input instead, and DirectInput
+    /// presses are ignored for a moment after it closes so the replay can't reopen it.</summary>
+    void UpdateGameBarState()
+    {
+        long now = Environment.TickCount64;
+        if (now < _gameBarCheckAt) return;
+        _gameBarCheckAt = now + GameBarCheckMs;
+        bool open = GameBarState.IsInputRedirected;
+        if (GameBarState.Problem is { } problem && !_gameBarProblemShown)
+        { _gameBarProblemShown = true; SetStatus("Can't tell when the Game Bar is open, so the stick won't drive it: " + problem, true); }
+        if (open == _gameBarOpen) return;
+        if (!open) _ignoreDirectInputUntil = now + ReplayGuardMs;
+        _gameBarOpen = open;
+        SetStatus(open ? "Game Bar open: your menu buttons drive it (left/right, up/down, A selects, B backs out; Guide closes it)." : "Game Bar closed.");
+    }
+    const long ReplayGuardMs = 1500;
+    long _ignoreDirectInputUntil;
+
+    void DriveGameBar()
+    {
+        long now = Environment.TickCount64;
+        if (!_gameBarOpen || _listenKey != null || _raw == null) { _navNextRepeat.Clear(); return; }
+        foreach (var (nav, keys) in NavKeys)
+        {
+            bool held = _adapter.Actions.Any(a => a.Nav == nav && _profile.Bindings.TryGetValue(a.Key, out var b) && IsHeld(b));
+            if (!held) { _navNextRepeat.Remove(nav); continue; }
+            bool repeats = nav is MenuNav.Up or MenuNav.Down or MenuNav.Left or MenuNav.Right;
+            if (!_navNextRepeat.TryGetValue(nav, out var next)) { SendNav(nav, keys); _navNextRepeat[nav] = now + NavRepeatDelayMs; }
+            else if (repeats && now >= next) { SendNav(nav, keys); _navNextRepeat[nav] = now + NavRepeatMs; }
+        }
+    }
+
+    void SendNav(MenuNav nav, ushort[] keys)
+    {
+        uint sent = KeyInput.Press(keys);
+        SetStatus(sent == keys.Length * 2 ? $"Game Bar: {nav}" : $"Game Bar: {nav} wasn't delivered (Windows blocked the key press).", sent != keys.Length * 2);
+    }
+    bool _gameBarProblemShown;
+
+    /// <summary>Whether a binding's control is held now (or was tapped since the last tick), from Raw Input: only used while
+    /// the Game Bar is open, when DirectInput is paused.</summary>
+    bool IsHeld(Binding b)
+    {
+        if (b.Raw != null || b.Input is not { } i || _raw == null || !_raw.States.TryGetValue(b.DeviceProduct, out var s)) return false;
+        return i.Kind switch
+        {
+            InputKind.Button => i.Index < s.Buttons.Length && (s.Buttons[i.Index] || s.Pressed.Contains(i.Index)),
+            InputKind.Pov => i.Index < s.Pov.Length && DirectInputService.PovDir(s.Pov[i.Index]) == i.Direction,
+            _ => false
+        };
+    }
+
     /// <summary>A bound system button: pressed since the last poll, and held now. Null if unbound or its device is unplugged.</summary>
     (bool pressed, bool down)? SystemState(GameAction a)
     {
         if (!_settings.System.TryGetValue(a.Key, out var g)) return null;
+        if (_gameBarOpen) // DirectInput is paused: read Raw Input
+            return _raw != null && _raw.States.TryGetValue(g.DeviceProduct, out var r) && g.Button >= 0 && g.Button < r.Buttons.Length
+                ? (r.Pressed.Contains(g.Button), r.Buttons[g.Button]) : null;
+        if (Environment.TickCount64 < _ignoreDirectInputUntil) return null; // DirectInput replaying what was queued while it was open
         var d = _di?.Devices.FirstOrDefault(x => x.Info.ProductGuid == g.DeviceProduct);
         if (d == null || g.Button < 0 || g.Button >= d.State.Buttons.Length) return null;
         return (d.State.Pressed.Contains(g.Button), d.State.Buttons[g.Button]);
@@ -512,7 +637,7 @@ sealed class MainForm : Form
     void ShowListenNote(string why)
     {
         foreach (DataGridViewRow r in _grid.Rows)
-            if (r.Tag is GameAction a && a.Key == _listenKey) { r.Cells["Input"].Value = "still waiting: " + why; break; }
+            if (r.Tag is GameAction a && a.Key == _listenKey) { r.Cells["Device"].Value = "still waiting: " + why; break; } // read-only cell
     }
 
     void SaveSettings()
@@ -526,7 +651,7 @@ sealed class MainForm : Form
         _profile = ProfileStore.Load(_adapter.Id);
         SyncBindingTypes(); // older profiles have no device type, and a device's type can be changed
         _path.Text = _adapter.ConfigPath + (File.Exists(_adapter.ConfigPath) ? "" : "   (not found: run the game once with your devices connected)");
-        RefreshGrid(); RebuildDevices(); UpdateSync();
+        RebuildTabs(); RefreshGrid(); RebuildDevices(); UpdateSync();
         SetStatus($"{_adapter.Name}: {_profile.Bindings.Count} bindings loaded.");
     }
 
@@ -570,8 +695,22 @@ sealed class MainForm : Form
             var item = new ToolStripMenuItem(Path.GetFileName(f));
             item.Click += (_, _) =>
             {
-                if (MessageBox.Show(this, $"Restore {Path.GetFileName(f)}?\n\nYour current file is backed up first.", "Restore", MessageBoxButtons.OKCancel) != DialogResult.OK) return;
-                try { _adapter.Restore(f); SetStatus($"Restored {Path.GetFileName(f)}."); RebuildDevices(); UpdateSync(); }
+                if (MessageBox.Show(this, $"Restore {Path.GetFileName(f)}?\n\nThe grid will show the bindings in that file. Your current " +
+                                          $"{Path.GetFileName(_adapter.ConfigPath)} and your current bindings are both backed up first.",
+                                    "Restore", MessageBoxButtons.OKCancel) != DialogResult.OK) return;
+                try
+                {
+                    var restored = _adapter.ReadBindings(f);
+                    var profileBackup = ProfileStore.Backup(_adapter.Id);
+                    _adapter.Restore(f);
+                    _listenKey = null;
+                    _profile.Bindings = restored;
+                    foreach (var b in restored.Values.Where(b => b.DeviceName.Length == 0)) // no ProductName line: name it from the device
+                        b.DeviceName = _di?.Devices.FirstOrDefault(d => d.Info.ProductGuid == b.DeviceProduct)?.Info.ProductName ?? "Unknown device";
+                    SyncBindingTypes(); SaveProfile(); RefreshGrid(); RebuildDevices(); UpdateSync();
+                    SetStatus($"Restored {Path.GetFileName(f)} and its {restored.Count} bindings." +
+                              (profileBackup.Length > 0 ? $" Your previous bindings are saved as {profileBackup}." : ""));
+                }
                 catch (Exception ex) { SetStatus("Restore failed: " + ex.Message, true); }
             };
             m.Items.Add(item);

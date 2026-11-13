@@ -11,6 +11,11 @@ public static class Presets
     // HID gamepad: AC7 ignores it until it reports as Flight (DeviceTypeOverride). X/Y toe brakes, Z rudder.
     public static readonly Guid VelocityOneRudder = new("701210F5-0000-0000-0000-504944564944");
 
+    /// <summary>Buttons that physically exist, for devices that report more than they have (DirectInput can't tell).
+    /// From the VelocityOne Flightdeck Quick Flight Guide: the stick reports 40 but has 1–33 (user-confirmed: 34–40 never
+    /// fire), the throttle reports 47 but has 1–41.</summary>
+    public static readonly IReadOnlyDictionary<Guid, int> PhysicalButtons = new Dictionary<Guid, int> { [FlightdeckStick] = 33, [FlightdeckThrottle] = 41 };
+
     static InputRef B(int n) => new(InputKind.Button, n - 1);
     static InputRef A(int i, bool inv = false) => new(InputKind.Axis, i, '\0', inv);
     static InputRef H(int hat, char d) => new(InputKind.Pov, hat - 1, d);
@@ -64,6 +69,16 @@ public static class ProfileStore
         }
         catch { }
         return new GameProfile { GameId = gameId };
+    }
+
+    /// <summary>Copies the saved bindings to "&lt;game&gt;.json.bak-&lt;date-time&gt;" and returns that file name ("" if nothing was saved yet).</summary>
+    public static string Backup(string gameId)
+    {
+        var f = Path.Combine(Dir, gameId + ".json");
+        if (!File.Exists(f)) return "";
+        var bak = $"{f}.bak-{DateTime.Now:yyyyMMdd-HHmmss}";
+        File.Copy(f, bak, overwrite: true);
+        return Path.GetFileName(bak);
     }
 
     public static void Save(GameProfile p)

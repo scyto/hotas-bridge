@@ -54,9 +54,17 @@ sealed class DeviceView : Control
     /// <summary>True when HOTAS Bridge (or anyone) has overridden the type this device reports.</summary>
     public bool Overridden { get; set; }
     /// <summary>How many buttons the selected game reads; the rest are drawn greyed (they still light up when pressed).</summary>
-    public int ButtonLimit { get; set; } = 128;
-    /// <summary>Shown after the button count when the device has more buttons than the game reads, e.g. "AC7 reads 1–32".</summary>
-    public string? LimitLabel { get; set; }
+    public int ButtonLimit { get => _buttonLimit; set { _buttonLimit = value; Remeasure(); } }
+    int _buttonLimit = 128;
+    /// <summary>The selected game's name. When the device has more buttons than the game reads, the buttons are shown in two
+    /// labelled groups: the ones the game reads, and the rest (which system buttons can still use).</summary>
+    public string? GameName { get => _gameName; set { _gameName = value; Remeasure(); } }
+    /// <summary>How many buttons physically exist, when the device reports more (Presets.PhysicalButtons); null = trust it.</summary>
+    public int? PhysicalButtons { get => _physical; set { _physical = value; Remeasure(); } }
+    int? _physical;
+    int ShownButtons => Math.Min(Math.Min(Device.State.ButtonCount, 128), _physical ?? 128);
+    string? _gameName;
+    void Remeasure() { Height = CalcHeight(Math.Max(Width, S(340))); Invalidate(); }
     /// <summary>The "reports as" button; clicking it raises TypeClicked.</summary>
     public Button TypeButton => _type;
     public event EventHandler? TypeClicked;
@@ -125,9 +133,29 @@ sealed class DeviceView : Control
         EnsureFonts();
         var s = Device.State;
         int axes = s.AxisPresent.Count(x => x);
-        int btnRows = (int)Math.Ceiling(Math.Min(s.ButtonCount, 128) / (double)PerRow(width));
-        return Pad + HeaderH + axes * AxisRowH + S(8) + (s.PovCount > 0 ? S(40) : 0) + btnRows * (CellH + S(3)) + Pad;
+        return Pad + HeaderH + axes * AxisRowH + S(8) + (s.PovCount > 0 ? S(40) : 0) + ButtonsHeight(width) + Pad;
     }
+
+    /// <summary>Button groups as (heading, first index, end index): one unlabelled group, or, when the device has more buttons
+    /// than the game reads, the ones it reads and the rest.</summary>
+    (string? heading, int from, int to)[] ButtonGroups()
+    {
+        int n = ShownButtons;
+        if (n <= ButtonLimit || GameName == null) return new (string?, int, int)[] { (null, 0, n) };
+        return new (string?, int, int)[]
+        {
+            ($"{GameName} reads these", 0, ButtonLimit),
+            ($"{GameName} can't read these. System buttons (Guide, Share) can use them.", ButtonLimit, n),
+        };
+    }
+
+    int HeadingH(string text, int width) =>
+        TextRenderer.MeasureText(text, _mono, new Size(Math.Max(S(40), width - 2 * Pad), 0), TextFormatFlags.WordBreak).Height + S(3);
+
+    int GroupRowsH(int count, int width) => (int)Math.Ceiling(count / (double)PerRow(width)) * (CellH + S(3));
+
+    int ButtonsHeight(int width) =>
+        ButtonGroups().Sum(g => (g.heading != null ? HeadingH(g.heading, width) : 0) + GroupRowsH(g.to - g.from, width) + S(6));
 
     void Relayout()
     {
@@ -151,8 +179,7 @@ sealed class DeviceView : Control
         int pad = Pad, line = LineH, y = pad;
         TextRenderer.DrawText(g, Device.Info.ProductName, _bold, new Point(pad, y), Theme.Text);
         y += TitleRowH + S(2);
-        var limit = s.ButtonCount > ButtonLimit && LimitLabel != null ? $" ({LimitLabel})" : "";
-        var id = $"{Device.Info.VidPid} · {s.ButtonCount} btn{limit} · {s.PovCount} hat" + (Overridden ? " · type changed in Windows" : "");
+        var id = $"{Device.Info.VidPid} · {ShownButtons} btn · {s.PovCount} hat" + (Overridden ? " · type changed in Windows" : "");
         TextRenderer.DrawText(g, id, _mono, new Point(pad, y), Theme.Dim);
         y += line;
         if (Note != null) { y += S(2); TextRenderer.DrawText(g, Note, _mono, new Point(pad, y), Theme.Amber); y += line; }
@@ -199,15 +226,26 @@ sealed class DeviceView : Control
             y += S(40);
         }
 
-        int perRow = PerRow(Width), cellW = CellW, cellH = CellH, n = Math.Min(s.ButtonCount, 128);
-        for (int i = 0; i < n; i++)
+        int perRow = PerRow(Width), cellW = CellW, cellH = CellH;
+        foreach (var (heading, from, to) in ButtonGroups())
         {
-            var r = new Rectangle(pad + (i % perRow) * cellW, y + (i / perRow) * (cellH + S(3)), cellW - S(3), cellH);
-            bool on = s.Buttons[i];
-            using (var b = new SolidBrush(on ? Theme.Amber : Color.FromArgb(22, 24, 27))) g.FillRectangle(b, r);
-            using (var p = new Pen(on ? Theme.Amber : Theme.Line)) g.DrawRectangle(p, r);
-            TextRenderer.DrawText(g, (i + 1).ToString(), _mono, r, on ? Color.FromArgb(26, 18, 5) : (i >= ButtonLimit ? Color.FromArgb(90, 95, 100) : Theme.Dim),
-                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            if (heading != null)
+            {
+                int hh = HeadingH(heading, Width);
+                TextRenderer.DrawText(g, heading, _mono, new Rectangle(pad, y, Width - 2 * pad, hh), Theme.Dim, TextFormatFlags.WordBreak);
+                y += hh;
+            }
+            for (int i = from; i < to; i++)
+            {
+                int k = i - from;
+                var r = new Rectangle(pad + (k % perRow) * cellW, y + (k / perRow) * (cellH + S(3)), cellW - S(3), cellH);
+                bool on = s.Buttons[i];
+                using (var b = new SolidBrush(on ? Theme.Amber : Color.FromArgb(22, 24, 27))) g.FillRectangle(b, r);
+                using (var p = new Pen(on ? Theme.Amber : Theme.Line)) g.DrawRectangle(p, r);
+                TextRenderer.DrawText(g, (i + 1).ToString(), _mono, r, on ? Color.FromArgb(26, 18, 5) : Theme.Dim,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            }
+            y += GroupRowsH(to - from, Width) + S(6);
         }
     }
 

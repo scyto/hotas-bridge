@@ -23,6 +23,14 @@ public interface IGameAdapter
     /// <summary>Why the game ignores a whole device (by DirectInput type), or null if it reads it. Null type = unknown, assume OK.</summary>
     string? UnsupportedDevice(string? deviceType, string deviceName);
 
+    /// <summary>Null if typed binding text is valid in the game's syntax, else why not (shown, and the text isn't saved).</summary>
+    string? CheckRaw(string text);
+    /// <summary>The input for typed text that names a single control (e.g. "Button8", "Y:R"); null for anything else.</summary>
+    InputRef? ParseInput(string text);
+    /// <summary>The bindings in a copy of the game's file (e.g. a backup), as profile bindings, so Restore can bring the grid
+    /// back to match the restored file.</summary>
+    Dictionary<string, Binding> ReadBindings(string path);
+
     /// <summary>Devices the game's own config already knows about (product GUID → name).</summary>
     IReadOnlyDictionary<Guid, string> KnownDevices();
 

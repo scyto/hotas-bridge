@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace HotasBridge;
 
@@ -21,10 +22,11 @@ public sealed class Ac7Adapter : IGameAdapter
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "BANDAI NAMCO Entertainment", "ACE COMBAT 7", "Config", "Input.ini");
 
+    // Buttons: AC7 reads Button1–32 (confirmed in-game: Button33 did nothing, and AC7 blanked it when it rewrote Input.ini).
     // Gesture directions, per action (Models.GameAction). Throttle: AC7 is faster at lower values (the usual DirectInput
     // throttle convention). The Flightdeck Throttle's X rises when pushed forward (seen by Detect), so it needs X:R; in-game,
-    // plain X made pulling back accelerate. Pitch: the Flightdeck Stick preset's Y:R flies right; if the stick's Y falls going
-    // forward like most sticks, AC7 wants rising (as set here). That stick direction hasn't been measured yet.
+    // plain X made pulling back accelerate. Pitch: the Flightdeck Stick's Y falls going forward (measured: -1 fully forward)
+    // and its Y:R flies right, so AC7 wants pitch rising going forward. (Yes, the opposite of the throttle.)
     // Roll and yaw: right = rising.
     // Camera axes have no gesture: their direction hasn't been checked in-game.
     public IReadOnlyList<GameAction> Actions { get; } = new GameAction[]
@@ -49,29 +51,29 @@ public sealed class Ac7Adapter : IGameAdapter
         new("Flight_HatSwitchRight", "Flight", "Hat right", ActionKind.Button),
         new("Flight_CameraPitch", "Flight", "Camera pitch", ActionKind.Axis),
         new("Flight_CameraYaw", "Flight", "Camera yaw", ActionKind.Axis),
-        new("UI_A", "Menus", "A (confirm)", ActionKind.Button),
-        new("UI_B", "Menus", "B (back)", ActionKind.Button),
+        new("UI_A", "Menus", "A (confirm)", ActionKind.Button, Nav: MenuNav.Confirm),
+        new("UI_B", "Menus", "B (back)", ActionKind.Button, Nav: MenuNav.Back),
         new("UI_X", "Menus", "X", ActionKind.Button),
         new("UI_Y", "Menus", "Y", ActionKind.Button),
-        new("UI_LB", "Menus", "LB (prev tab)", ActionKind.Button),
-        new("UI_RB", "Menus", "RB (next tab)", ActionKind.Button),
+        new("UI_LB", "Menus", "LB (prev tab)", ActionKind.Button, Nav: MenuNav.Prev),
+        new("UI_RB", "Menus", "RB (next tab)", ActionKind.Button, Nav: MenuNav.Next),
         new("UI_LT", "Menus", "LT", ActionKind.Button),
         new("UI_RT", "Menus", "RT", ActionKind.Button),
         new("UI_Menu", "Menus", "Menu (pause)", ActionKind.Button),
-        new("UI_LeftStickUp", "Menus", "Left stick up (menu up)", ActionKind.Button),
-        new("UI_LeftStickDown", "Menus", "Left stick down (menu down)", ActionKind.Button),
-        new("UI_LeftStickLeft", "Menus", "Left stick left (menu left)", ActionKind.Button),
-        new("UI_LeftStickRight", "Menus", "Left stick right (menu right)", ActionKind.Button),
+        new("UI_LeftStickUp", "Menus", "Left stick up (menu up)", ActionKind.Button, Nav: MenuNav.Up),
+        new("UI_LeftStickDown", "Menus", "Left stick down (menu down)", ActionKind.Button, Nav: MenuNav.Down),
+        new("UI_LeftStickLeft", "Menus", "Left stick left (menu left)", ActionKind.Button, Nav: MenuNav.Left),
+        new("UI_LeftStickRight", "Menus", "Left stick right (menu right)", ActionKind.Button, Nav: MenuNav.Right),
         new("UI_LeftStickPress", "Menus", "Left stick click", ActionKind.Button),
         new("UI_RightStickUp", "Menus", "Right stick up", ActionKind.Button),
         new("UI_RightStickDown", "Menus", "Right stick down", ActionKind.Button),
         new("UI_RightStickLeft", "Menus", "Right stick left", ActionKind.Button),
         new("UI_RightStickRight", "Menus", "Right stick right", ActionKind.Button),
         new("UI_RightStickPress", "Menus", "Right stick click", ActionKind.Button),
-        new("UI_DPadUp", "Menus", "D-pad up", ActionKind.Button),
-        new("UI_DPadDown", "Menus", "D-pad down", ActionKind.Button),
-        new("UI_DPadLeft", "Menus", "D-pad left", ActionKind.Button),
-        new("UI_DPadRight", "Menus", "D-pad right", ActionKind.Button),
+        new("UI_DPadUp", "Menus", "D-pad up", ActionKind.Button, Nav: MenuNav.Up),
+        new("UI_DPadDown", "Menus", "D-pad down", ActionKind.Button, Nav: MenuNav.Down),
+        new("UI_DPadLeft", "Menus", "D-pad left", ActionKind.Button, Nav: MenuNav.Left),
+        new("UI_DPadRight", "Menus", "D-pad right", ActionKind.Button, Nav: MenuNav.Right),
     };
 
     static readonly string[] EnableKeys = { "EnableJoystick", "EnableDeviceJoystick", "EnableDeviceFlight", "EnableDevice1stPerson" };
@@ -104,6 +106,57 @@ public sealed class Ac7Adapter : IGameAdapter
     }
 
     static string Header(Guid product) => "Joystick-" + product.ToString().ToUpperInvariant();
+
+    // ---- typed bindings, and reading bindings back from a file ----
+    static readonly Regex Token = new(@"^(?:X|Y|Z|Rx|Ry|Rz|Slider[12]|POV_[UDLR][1-4]|Button\d{1,3})(?::[PNRC])*$", RegexOptions.IgnoreCase);
+
+    /// <summary>Inputs (X … Slider2, POV_U1 … POV_R4, Button1 … Button32) with modifiers :P :N :R :C, joined by &amp; ! + &gt; &lt;.</summary>
+    public string? CheckRaw(string text)
+    {
+        var parts = Regex.Split(text.Trim(), @"\s*[&!+<>]\s*").Where(p => p.Length > 0).ToList();
+        if (parts.Count == 0) return "That's empty.";
+        var bad = parts.FirstOrDefault(p => !Token.IsMatch(p));
+        if (bad != null) return $"\"{bad}\" isn't AC7 binding syntax (e.g. Button3, POV_U1, Y:R).";
+        var over = parts.Select(p => Regex.Match(p, @"^Button(\d+)", RegexOptions.IgnoreCase))
+                        .FirstOrDefault(m => m.Success && int.Parse(m.Groups[1].Value) > MaxButtons);
+        return over == null ? null : $"AC7 only reads Button1–{MaxButtons} ({over.Value} does nothing in-game; tested).";
+    }
+
+    /// <summary>Simple values become inputs (as Detect would make them); anything else is kept as typed text. The profile holds
+    /// one binding per action, so if several devices bind the same action, the first section wins.</summary>
+    public Dictionary<string, Binding> ReadBindings(string path)
+    {
+        var result = new Dictionary<string, Binding>();
+        var keys = Actions.ToDictionary(a => a.Key, a => a.Key, StringComparer.OrdinalIgnoreCase);
+        foreach (var s in Parse(File.ReadAllText(path)))
+        {
+            if (s.Header == null || !s.Header.StartsWith("Joystick-", StringComparison.OrdinalIgnoreCase) || !Guid.TryParse(s.Header[9..], out var product)) continue;
+            string name = s.Lines.Where(l => KeyOf(l).Equals("ProductName", StringComparison.OrdinalIgnoreCase)).Select(ValOf).FirstOrDefault() ?? "";
+            foreach (var l in s.Lines)
+            {
+                if (!keys.TryGetValue(KeyOf(l), out var key) || result.ContainsKey(key)) continue;
+                var v = ValOf(l);
+                if (v.Length == 0) continue;
+                var input = ParseToken(v);
+                if (input == null && CheckRaw(v) != null) continue; // not a binding AC7 could read (e.g. stray text)
+                result[key] = new Binding { DeviceProduct = product, DeviceName = name, Input = input, Raw = input == null ? v : null };
+            }
+        }
+        return result;
+    }
+
+    public InputRef? ParseInput(string v) => ParseToken(v.Trim());
+
+    static InputRef? ParseToken(string v)
+    {
+        var m = Regex.Match(v, @"^(X|Y|Z|Rx|Ry|Rz|Slider1|Slider2)(:R)?$", RegexOptions.IgnoreCase);
+        if (m.Success) return new InputRef(InputKind.Axis, Array.FindIndex(InputRef.AxisNames, n => n.Equals(m.Groups[1].Value, StringComparison.OrdinalIgnoreCase)), '\0', m.Groups[2].Success);
+        m = Regex.Match(v, @"^Button(\d{1,3})$", RegexOptions.IgnoreCase);
+        if (m.Success && int.Parse(m.Groups[1].Value) is var n and >= 1 and <= 128) return new InputRef(InputKind.Button, n - 1);
+        m = Regex.Match(v, @"^POV_([UDLR])([1-4])$", RegexOptions.IgnoreCase);
+        if (m.Success) return new InputRef(InputKind.Pov, int.Parse(m.Groups[2].Value) - 1, char.ToUpperInvariant(m.Groups[1].Value[0]));
+        return null;
+    }
 
     // ---- ini model that preserves everything it doesn't touch ----
     sealed class Section { public string? Header; public List<string> Lines = new(); }
