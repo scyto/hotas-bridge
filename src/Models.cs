@@ -42,9 +42,11 @@ public sealed class Binding
 
 public enum ActionKind { Axis, Button }
 
-/// <param name="Gesture">For axes: the movement Detect asks for, which the game reads as positive (e.g. "push the throttle
-/// forward"). Detect sets Invert when the device reports that movement as negative. Null = no known convention.</param>
-public sealed record GameAction(string Key, string Group, string Description, ActionKind Kind, string? Gesture = null);
+/// <param name="Gesture">For axes: the movement Detect asks for (e.g. "push the throttle forward"). Null = no known convention.</param>
+/// <param name="GestureNegative">Which way the game wants that movement to read: false = rising values, true = falling values
+/// (AC7's throttle: lower is faster). Detect sets Invert when the device reports the movement the other way. This is
+/// measured per game and action; games don't agree on one rule.</param>
+public sealed record GameAction(string Key, string Group, string Description, ActionKind Kind, string? Gesture = null, bool GestureNegative = false);
 
 /// <summary>A preset: bindings for one device model (by product GUID) in one game.</summary>
 public sealed record Preset(string Name, string GameId, Guid DeviceProduct, string DeviceName, IReadOnlyDictionary<string, InputRef> Map);

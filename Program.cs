@@ -6,6 +6,8 @@ static class Program
     static void Main()
     {
         ApplicationConfiguration.Initialize();
-        Application.Run(new MainForm());
+        var settings = AppSettings.Load();
+        Theme.SetTextScale(settings.TextScale); // before any control picks up a Theme font
+        Application.Run(new MainForm(settings));
     }
 }

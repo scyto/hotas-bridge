@@ -13,6 +13,12 @@ sealed class MainForm : Form
     readonly DataGridView _grid = new();
     readonly ToolStripStatusLabel _status = new() { Spring = true, TextAlign = ContentAlignment.MiddleLeft };
     readonly System.Windows.Forms.Timer _timer = new() { Interval = 15 };
+    readonly AppSettings _settings;
+    readonly Label _title = new() { Text = "HOTAS BRIDGE", AutoSize = true, Font = Theme.Title, ForeColor = Theme.Amber, Margin = new Padding(0, 4, 16, 0) };
+    readonly SplitContainer _split = new() { Dock = DockStyle.Fill, BackColor = Theme.Line, FixedPanel = FixedPanel.Panel1 };
+    readonly StatusStrip _strip = new() { BackColor = Theme.Panel2, ForeColor = Theme.Text, SizingGrip = false, Font = Theme.Ui };
+    readonly ContextMenuStrip _presetMenu = new(), _restoreMenu = new(), _textMenu = new() { ShowCheckMargin = true, ShowImageMargin = false };
+    Button _btnInstall = null!;
     DirectInputService? _di;
     IGameAdapter _adapter = GameRegistry.All[0];
     GameProfile _profile = new();
@@ -21,8 +27,9 @@ sealed class MainForm : Form
     string? _listenKey;
     Dictionary<Guid, (float[] axes, int[] pov, bool[] btn)> _baseline = new();
 
-    public MainForm()
+    public MainForm(AppSettings settings)
     {
+        _settings = settings;
         // Sizes below are 96-DPI values; WinForms scales the controls to the monitor's DPI (PerMonitorV2, see csproj).
         AutoScaleDimensions = new SizeF(96F, 96F);
         AutoScaleMode = AutoScaleMode.Dpi;
@@ -30,56 +37,54 @@ sealed class MainForm : Form
         BackColor = Theme.Bg; ForeColor = Theme.Text; Font = Theme.Ui;
         StartPosition = FormStartPosition.CenterScreen; // size is set in Load, once the monitor DPI is known
 
-        // ---- top bar ----
-        var top = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 54, Padding = new Padding(12, 12, 12, 6), BackColor = Theme.Bg, WrapContents = false };
-        var title = new Label { Text = "HOTAS BRIDGE", AutoSize = true, Font = new Font("Segoe UI Black", 13f), ForeColor = Theme.Amber, Margin = new Padding(0, 4, 16, 0) };
+        // ---- top bar ---- (sized to its contents, and wraps rather than clipping when the text is large)
+        var top = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(12, 12, 12, 8), BackColor = Theme.Bg, WrapContents = true };
         foreach (var g in GameRegistry.All) _game.Items.Add(g.Name);
         _game.SelectedIndex = 0;
         _game.SelectedIndexChanged += (_, _) => { _adapter = GameRegistry.All[_game.SelectedIndex]; LoadGame(); };
         var btnPreset = MakeButton("Load preset ▾", false);
-        var presetMenu = new ContextMenuStrip();
-        btnPreset.Click += (_, _) => { BuildPresetMenu(presetMenu); presetMenu.Show(btnPreset, new Point(0, btnPreset.Height)); };
-        var btnInstall = MakeButton("Back up && overwrite", true);
-        btnInstall.Click += (_, _) => Install();
+        btnPreset.Click += (_, _) => { BuildPresetMenu(_presetMenu); ShowMenu(_presetMenu, btnPreset); };
+        _btnInstall = MakeButton("Back up && overwrite", true);
+        _btnInstall.Click += (_, _) => Install();
         var btnRestore = MakeButton("Restore ▾", false);
-        var restoreMenu = new ContextMenuStrip();
-        btnRestore.Click += (_, _) => { BuildRestoreMenu(restoreMenu); restoreMenu.Show(btnRestore, new Point(0, btnRestore.Height)); };
+        btnRestore.Click += (_, _) => { BuildRestoreMenu(_restoreMenu); ShowMenu(_restoreMenu, btnRestore); };
         var btnPreview = MakeButton("Preview", false);
         btnPreview.Click += (_, _) => ShowPreview();
         var btnFolder = MakeButton("Open folder", false);
         btnFolder.Click += (_, _) => { var d = Path.GetDirectoryName(_adapter.ConfigPath)!; if (Directory.Exists(d)) Process.Start("explorer.exe", d); };
         var btnRefresh = MakeButton("Rescan devices", false);
         btnRefresh.Click += (_, _) => { _di?.Refresh(); SyncBindingTypes(); RebuildDevices(); RefreshGrid(); };
-        top.Controls.AddRange(new Control[] { title, _game, btnPreset, btnInstall, btnRestore, btnPreview, btnFolder, btnRefresh });
+        var btnText = MakeButton("Text size ▾", false);
+        btnText.Click += (_, _) => { BuildTextMenu(); ShowMenu(_textMenu, btnText); };
+        top.Controls.AddRange(new Control[] { _title, _game, btnPreset, _btnInstall, btnRestore, btnPreview, btnFolder, btnRefresh, btnText });
 
-        var pathBar = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 26, Padding = new Padding(14, 0, 0, 0), BackColor = Theme.Bg, WrapContents = false };
+        var pathBar = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(14, 0, 0, 4), BackColor = Theme.Bg, WrapContents = true };
         pathBar.Controls.Add(_path); pathBar.Controls.Add(_sync);
 
         // ---- grid ----
         SetupGrid();
 
         // SplitterDistance is set in Load: here the container still has its default ~150px width and WinForms clamps it
-        var split = new SplitContainer { Dock = DockStyle.Fill, BackColor = Theme.Line, FixedPanel = FixedPanel.Panel1 };
-        split.Panel1.Controls.Add(_devices);
+        _split.Panel1.Controls.Add(_devices);
         var right = new Panel { Dock = DockStyle.Fill, Padding = new Padding(12), BackColor = Theme.Panel };
         right.Controls.Add(_grid);
-        split.Panel2.Controls.Add(right);
+        _split.Panel2.Controls.Add(right);
 
-        var strip = new StatusStrip { BackColor = Theme.Panel2, ForeColor = Theme.Text, SizingGrip = false };
-        strip.Items.Add(_status);
+        _strip.Items.Add(_status);
 
-        Controls.Add(split); Controls.Add(pathBar); Controls.Add(top); Controls.Add(strip);
+        Controls.Add(_split); Controls.Add(pathBar); Controls.Add(top); Controls.Add(_strip);
         _devices.SizeChanged += (_, _) => { foreach (Control c in _devices.Controls) c.Width = CardWidth; };
         DpiChanged += (_, _) => BeginInvoke(new Action(() => { ApplyGridMetrics(); RefreshGrid(); }));
 
         Load += (_, _) =>
         {
-            // size for this monitor's DPI, but never bigger than its working area
+            // size for this monitor's DPI and the text size, but never bigger than its working area
             var wa = Screen.FromControl(this).WorkingArea;
-            MinimumSize = new Size(Math.Min(LogicalToDeviceUnits(1000), wa.Width), Math.Min(LogicalToDeviceUnits(640), wa.Height));
-            Size = new Size(Math.Min(LogicalToDeviceUnits(1400), wa.Width * 19 / 20), Math.Min(LogicalToDeviceUnits(900), wa.Height * 19 / 20));
+            MinimumSize = new Size(Math.Min(L(1000), wa.Width), Math.Min(L(640), wa.Height));
+            Size = new Size(Math.Min(L(1400), wa.Width * 19 / 20), Math.Min(L(900), wa.Height * 19 / 20));
             CenterToScreen();
-            split.SplitterDistance = Math.Min(LogicalToDeviceUnits(480), split.Width / 2);
+            _split.SplitterDistance = Math.Min(L(480), _split.Width / 2);
+            _game.Width = L(260);
             ApplyGridMetrics();
             try { _di = new DirectInputService(Handle); }
             catch (Exception ex) { SetStatus("DirectInput failed to start: " + ex.Message, true); }
@@ -100,6 +105,61 @@ sealed class MainForm : Form
     };
 
     void SetStatus(string msg, bool err = false) { _status.Text = msg; _status.ForeColor = err ? Theme.Red : Theme.Green; }
+
+    /// <summary>A 96-DPI size in device pixels, grown with the user's text size.</summary>
+    int L(int px) => LogicalToDeviceUnits((int)Math.Round(px * Theme.TextScale));
+
+    static void ShowMenu(ContextMenuStrip m, Control under) { m.Font = Theme.Ui; m.Show(under, new Point(0, under.Height)); }
+
+    // ---------- text size ----------
+    void BuildTextMenu()
+    {
+        _textMenu.Items.Clear();
+        foreach (var s in Theme.TextScales)
+        {
+            var item = new ToolStripMenuItem($"{s * 100:0}%" + (s == 1f ? "  (default)" : "")) { Checked = Math.Abs(s - Theme.TextScale) < 0.001f };
+            item.Click += (_, _) => SetTextSize(s);
+            _textMenu.Items.Add(item);
+        }
+    }
+
+    /// <summary>Applies and saves a new text size. The window and the device column grow or shrink with it.</summary>
+    void SetTextSize(float scale)
+    {
+        float r = Math.Clamp(scale, 0.75f, 3f) / Theme.TextScale;
+        if (Math.Abs(r - 1f) < 0.001f) return;
+        Theme.SetTextScale(scale);
+        _settings.TextScale = Theme.TextScale;
+        try { _settings.Save(); } catch (Exception ex) { SetStatus("Couldn't save the text size: " + ex.Message, true); }
+
+        SuspendLayout();
+        ApplyFonts();
+        var wa = Screen.FromControl(this).WorkingArea;
+        MinimumSize = new Size(Math.Min(L(1000), wa.Width), Math.Min(L(640), wa.Height));
+        if (WindowState == FormWindowState.Normal)
+        {
+            var size = new Size(Math.Min((int)(Width * r), wa.Width), Math.Min((int)(Height * r), wa.Height));
+            Bounds = new Rectangle(Math.Clamp(Left, wa.Left, wa.Right - size.Width), Math.Clamp(Top, wa.Top, wa.Bottom - size.Height), size.Width, size.Height);
+        }
+        ResumeLayout(true);
+        _split.SplitterDistance = Math.Min((int)(_split.SplitterDistance * r), _split.Width / 2);
+        ApplyGridMetrics(); RebuildDevices(); RefreshGrid();
+        SetStatus($"Text size {Theme.TextScale * 100:0}%.");
+    }
+
+    /// <summary>Hands the current Theme fonts to every control that holds its own (after the text size changes).</summary>
+    void ApplyFonts()
+    {
+        Font = Theme.Ui;
+        _title.Font = Theme.Title; _path.Font = Theme.Mono; _sync.Font = Theme.Ui; _game.Font = Theme.Ui; _strip.Font = Theme.Ui;
+        foreach (var b in _btnInstall.Parent!.Controls.OfType<Button>()) b.Font = b == _btnInstall ? Theme.UiBold : Theme.Ui;
+        _game.Width = L(260);
+        // assign new styles: DataGridView's DefaultCellStyle getter can return a temporary copy, so setting .Font on it does nothing
+        _grid.ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle(_grid.ColumnHeadersDefaultCellStyle) { Font = Theme.UiBold };
+        _grid.DefaultCellStyle = new DataGridViewCellStyle(_grid.DefaultCellStyle) { Font = Theme.Ui };
+        foreach (var name in new[] { "Action", "Input" })
+            _grid.Columns[name].DefaultCellStyle = new DataGridViewCellStyle(_grid.Columns[name].DefaultCellStyle) { Font = Theme.Mono };
+    }
 
     // ---------- grid ----------
     void SetupGrid()
@@ -215,9 +275,9 @@ sealed class MainForm : Form
     }
 
     /// <summary>An axis binding for a movement from <paramref name="from"/> to <paramref name="to"/> (-1..1). If the action has
-    /// a gesture, the user made that movement, and the game reads it as positive: invert when the device reported it as negative.</summary>
+    /// a gesture, the user made that movement: invert when the device moved the other way from what the game wants.</summary>
     internal static InputRef AxisBinding(GameAction a, int axis, float from, float to) =>
-        new(InputKind.Axis, axis, '\0', a.Gesture != null && to < from);
+        new(InputKind.Axis, axis, '\0', a.Gesture != null && (to < from) != a.GestureNegative);
 
     static (float[], int[], bool[]) Snap(DeviceState s) => ((float[])s.Axes.Clone(), (int[])s.Pov.Clone(), (bool[])s.Buttons.Clone());
 
@@ -320,7 +380,7 @@ sealed class MainForm : Form
         { Enabled = current != ReportAs.Original };
         undo.Click += (_, _) => ChangeType(d, ReportAs.Original, v.Device.State.ButtonCount);
         m.Items.Add(undo);
-        m.Show(v.TypeButton, new Point(0, v.TypeButton.Height));
+        ShowMenu(m, v.TypeButton);
     }
 
     void ChangeType(DeviceInfo d, ReportAs t, int buttonCount)
@@ -470,8 +530,10 @@ sealed class MainForm : Form
     {
         string text;
         try { text = _adapter.Preview(_profile); } catch (Exception ex) { SetStatus("Preview failed: " + ex.Message, true); return; }
-        var f = new Form { Text = "Preview: " + Path.GetFileName(_adapter.ConfigPath), Size = new Size(760, 820), BackColor = Theme.Bg, StartPosition = FormStartPosition.CenterParent };
-        f.Controls.Add(new TextBox { Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Both, WordWrap = false, Dock = DockStyle.Fill, Font = new Font("Consolas", 10f), BackColor = Theme.Panel, ForeColor = Theme.Text, Text = text });
+        var wa = Screen.FromControl(this).WorkingArea;
+        using var f = new Form { Text = "Preview: " + Path.GetFileName(_adapter.ConfigPath), Size = new Size(Math.Min(L(760), wa.Width), Math.Min(L(820), wa.Height)), BackColor = Theme.Bg, StartPosition = FormStartPosition.CenterParent };
+        using var font = new Font("Consolas", 10f * Theme.TextScale);
+        f.Controls.Add(new TextBox { Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Both, WordWrap = false, Dock = DockStyle.Fill, Font = font, BackColor = Theme.Panel, ForeColor = Theme.Text, Text = text });
         f.ShowDialog(this);
     }
 }

@@ -13,10 +13,27 @@ static class Theme
     public static readonly Color Amber = Color.FromArgb(255, 154, 31);
     public static readonly Color Green = Color.FromArgb(70, 211, 138);
     public static readonly Color Red = Color.FromArgb(255, 93, 93);
-    public static readonly Font Ui = new("Segoe UI", 9.5f);
-    public static readonly Font UiBold = new("Segoe UI Semibold", 10f);
-    public static readonly Font Mono = new("Consolas", 8.5f);
-    public static readonly Font H = new("Segoe UI Semibold", 11f);
+    public static Font Ui { get; private set; } = null!;
+    public static Font UiBold { get; private set; } = null!;
+    public static Font Mono { get; private set; } = null!;
+    public static Font Title { get; private set; } = null!;
+
+    /// <summary>The user's text size (1 = 100%), on top of Windows' display scaling. Saved in AppSettings.</summary>
+    public static float TextScale { get; private set; }
+    public static readonly float[] TextScales = { 1f, 1.1f, 1.25f, 1.5f, 1.75f, 2f };
+
+    static Theme() => SetTextScale(1f);
+
+    /// <summary>Re-makes the fonts at <paramref name="scale"/>. Callers then hand the new fonts to their controls. The old
+    /// fonts aren't disposed: controls may still hold them, and this only happens when the user picks a size.</summary>
+    public static void SetTextScale(float scale)
+    {
+        TextScale = Math.Clamp(scale, 0.75f, 3f);
+        Ui = new("Segoe UI", 9.5f * TextScale);
+        UiBold = new("Segoe UI Semibold", 10f * TextScale);
+        Mono = new("Consolas", 8.5f * TextScale);
+        Title = new("Segoe UI Black", 13f * TextScale);
+    }
 
     /// <summary>The DPI that point-sized fonts are rendered at (the system DPI); per-monitor code scales from it.</summary>
     public static readonly float SystemDpi = GetSystemDpi();
@@ -44,6 +61,7 @@ sealed class DeviceView : Control
     static readonly ToolTip Tip = new();
     Font? _mono, _bold;
     int _fontDpi;
+    float _fontScale;
 
     public DeviceView(LiveDevice d)
     {
@@ -68,12 +86,12 @@ sealed class DeviceView : Control
     /// <summary>(Re)creates the fonts for the current DPI. Returns true if they changed.</summary>
     bool EnsureFonts()
     {
-        if (_mono != null && _fontDpi == DeviceDpi) return false;
+        if (_mono != null && _fontDpi == DeviceDpi && _fontScale == Theme.TextScale) return false;
         float k = DeviceDpi / Theme.SystemDpi;
         _mono?.Dispose(); _bold?.Dispose();
         _mono = new Font(Theme.Mono.FontFamily, Theme.Mono.Size * k, Theme.Mono.Style);
         _bold = new Font(Theme.UiBold.FontFamily, Theme.UiBold.Size * k, Theme.UiBold.Style);
-        _fontDpi = DeviceDpi;
+        _fontDpi = DeviceDpi; _fontScale = Theme.TextScale;
         _type.Font = _mono;
         _type.Padding = new Padding(S(2), 0, S(2), 0);
         Margin = new Padding(0, 0, 0, S(10));

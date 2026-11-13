@@ -21,20 +21,23 @@ public sealed class Ac7Adapter : IGameAdapter
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "BANDAI NAMCO Entertainment", "ACE COMBAT 7", "Config", "Input.ini");
 
-    // Gestures: AC7 reads forward and right as positive. Measured: the Flightdeck Stick needs Y:R for pitch (it reports
-    // forward as negative, like most sticks), and the Flightdeck Throttle needs X:R so that forward is faster.
+    // Gesture directions, per action (Models.GameAction). Throttle: AC7 is faster at lower values (the usual DirectInput
+    // throttle convention). The Flightdeck Throttle's X rises when pushed forward (seen by Detect), so it needs X:R; in-game,
+    // plain X made pulling back accelerate. Pitch: the Flightdeck Stick preset's Y:R flies right; if the stick's Y falls going
+    // forward like most sticks, AC7 wants rising (as set here). That stick direction hasn't been measured yet.
+    // Roll and yaw: right = rising.
     // Camera axes have no gesture: their direction hasn't been checked in-game.
     public IReadOnlyList<GameAction> Actions { get; } = new GameAction[]
     {
         new("Flight_Pitch", "Flight", "Pitch", ActionKind.Axis, "push the stick forward"),
         new("Flight_Roll", "Flight", "Roll", ActionKind.Axis, "move the stick right"),
         new("Flight_Yaw", "Flight", "Yaw (pedals / twist)", ActionKind.Axis, "push the right pedal (or twist the stick right)"),
-        new("Flight_Throttle", "Flight", "Throttle (centre = cruise)", ActionKind.Axis, "push the throttle forward, starting from the back"),
+        new("Flight_Throttle", "Flight", "Throttle (centre = cruise)", ActionKind.Axis, "push the throttle forward, starting from the back", GestureNegative: true),
         new("Flight_Gun", "Flight", "Fire gun", ActionKind.Button),
         new("Flight_Missile", "Flight", "Fire missile / special", ActionKind.Button),
         new("Flight_Weapon", "Flight", "Toggle missile / special", ActionKind.Button),
         new("Flight_Target", "Flight", "Change target", ActionKind.Button),
-        new("Flight_Radar", "Flight", "Radar zoom", ActionKind.Button),
+        new("Flight_Radar", "Flight", "Radar map", ActionKind.Button),
         new("Flight_Flare", "Flight", "Flares", ActionKind.Button),
         new("Flight_View", "Flight", "Toggle camera", ActionKind.Button),
         new("Flight_AccelerationDeceleration", "Flight", "Hold: high-G turn", ActionKind.Button),
@@ -46,19 +49,19 @@ public sealed class Ac7Adapter : IGameAdapter
         new("Flight_HatSwitchRight", "Flight", "Hat right", ActionKind.Button),
         new("Flight_CameraPitch", "Flight", "Camera pitch", ActionKind.Axis),
         new("Flight_CameraYaw", "Flight", "Camera yaw", ActionKind.Axis),
-        new("UI_A", "Menus", "Confirm", ActionKind.Button),
-        new("UI_B", "Menus", "Back", ActionKind.Button),
+        new("UI_A", "Menus", "A (confirm)", ActionKind.Button),
+        new("UI_B", "Menus", "B (back)", ActionKind.Button),
         new("UI_X", "Menus", "X", ActionKind.Button),
         new("UI_Y", "Menus", "Y", ActionKind.Button),
         new("UI_LB", "Menus", "LB (prev tab)", ActionKind.Button),
         new("UI_RB", "Menus", "RB (next tab)", ActionKind.Button),
         new("UI_LT", "Menus", "LT", ActionKind.Button),
         new("UI_RT", "Menus", "RT", ActionKind.Button),
-        new("UI_Menu", "Menus", "Menu / pause", ActionKind.Button),
-        new("UI_LeftStickUp", "Menus", "Menu up", ActionKind.Button),
-        new("UI_LeftStickDown", "Menus", "Menu down", ActionKind.Button),
-        new("UI_LeftStickLeft", "Menus", "Menu left", ActionKind.Button),
-        new("UI_LeftStickRight", "Menus", "Menu right", ActionKind.Button),
+        new("UI_Menu", "Menus", "Menu (pause)", ActionKind.Button),
+        new("UI_LeftStickUp", "Menus", "Left stick up (menu up)", ActionKind.Button),
+        new("UI_LeftStickDown", "Menus", "Left stick down (menu down)", ActionKind.Button),
+        new("UI_LeftStickLeft", "Menus", "Left stick left (menu left)", ActionKind.Button),
+        new("UI_LeftStickRight", "Menus", "Left stick right (menu right)", ActionKind.Button),
         new("UI_LeftStickPress", "Menus", "Left stick click", ActionKind.Button),
         new("UI_RightStickUp", "Menus", "Right stick up", ActionKind.Button),
         new("UI_RightStickDown", "Menus", "Right stick down", ActionKind.Button),

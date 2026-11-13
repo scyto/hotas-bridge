@@ -28,14 +28,16 @@ public static class Presets
             ["Flight_Target"] = B(3),             // thumbstick click
             ["Flight_Flare"] = B(8),              // thumb wheel click
             ["Flight_AccelerationDeceleration"] = B(10), // pinkie lever
-            ["Flight_View"] = B(4), ["Flight_Radar"] = B(6), ["Flight_AutoPilot"] = B(7),
-            ["Flight_Pause"] = B(22),             // base START
+            // 31 and 32 sit either side of START (22) like an Xbox pad's View and Menu either side of Guide, and do
+            // what those do in AC7: View = radar map, Menu = pause. AC7 can't read Guide, so 22 is left free.
+            ["Flight_View"] = B(4), ["Flight_Radar"] = B(31), ["Flight_AutoPilot"] = B(7),
+            ["Flight_Pause"] = B(32),
             ["Flight_HatSwitchUp"] = H(1, 'U'), ["Flight_HatSwitchDown"] = H(1, 'D'),
             ["Flight_HatSwitchLeft"] = H(1, 'L'), ["Flight_HatSwitchRight"] = H(1, 'R'),
             ["Flight_CameraPitch"] = A(4), ["Flight_CameraYaw"] = A(3),
             ["UI_A"] = B(28), ["UI_B"] = B(10), ["UI_X"] = B(7), ["UI_Y"] = B(4),
             ["UI_LB"] = B(29), ["UI_RB"] = B(30), // thumb wheel (set to buttons mode in Hangar)
-            ["UI_Menu"] = B(22),
+            ["UI_Menu"] = B(32),                  // AC7 has no menu action for View
             ["UI_LeftStickUp"] = H(1, 'U'), ["UI_LeftStickDown"] = H(1, 'D'),
             ["UI_LeftStickLeft"] = H(1, 'L'), ["UI_LeftStickRight"] = H(1, 'R'),
         }),
