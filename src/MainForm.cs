@@ -374,10 +374,7 @@ sealed class MainForm : Form
                 bool xinput = d.Info.IsXInput; // the game reads it through XInput: its DirectInput type is irrelevant
                 bool ignored = !xinput && _adapter.UnsupportedDevice(d.Info.DeviceType, d.Info.ProductName) != null;
                 var v = new DeviceView(d) { Width = CardWidth, Warn = ignored, Overridden = DeviceTypeOverride.Get(d.Info) != ReportAs.Original,
-                                            ButtonLimit = _adapter.MaxButtons, LimitLabel = $"{GameShortName} reads 1–{_adapter.MaxButtons}" };
-                if (d.State.ButtonCount > _adapter.MaxButtons)
-                    _tip.SetToolTip(v, $"Greyed buttons ({_adapter.MaxButtons + 1} and up) still work, but {GameShortName} only reads buttons 1–{_adapter.MaxButtons}. " +
-                                       "System buttons (Guide, Share) can use any button, because HOTAS Bridge reads them itself.");
+                                            ButtonLimit = _adapter.MaxButtons, GameName = xinput ? null : GameShortName };
                 if (xinput) v.Note = "Xbox controller: games read it directly (XInput). Nothing to set up here.";
                 else if (ignored) v.Note = $"{GameShortName} ignores {d.Info.DeviceType} devices. Click {d.Info.DeviceType} ▾ to change it.";
                 else if (!known.ContainsKey(d.Info.ProductGuid)) v.Note = "Not in the game's config yet. A section will be created on install.";

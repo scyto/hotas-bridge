@@ -16,7 +16,7 @@ Double-click `build.cmd` (needs the .NET 8 SDK). The exe ends up in `out\HotasBr
 - **Guide**: Win+G, which opens the Xbox Game Bar.
 - **Share**: a tap takes a screenshot (Win+Alt+PrtScn); holding it saves the last 30 seconds (Win+Alt+G, if Game Bar's background recording is on).
 
-System buttons can be any button, including ones the game can't read (greyed on the device cards). The Flightdeck Stick preset puts Guide on START (22) and Share on 33.
+System buttons can be any button, including ones the game can't read (the device cards list those separately). The Flightdeck Stick preset puts Guide on START (22) and Share on 33.
 
 While the Game Bar is open, your **Menus** bindings drive it like a pad, since it doesn't take joystick input. Menu left/right (stick or D-pad rows), or LB/RB, move between widgets, and each one opens as you land on it. Menu down goes into the widget and down through it; up goes back. A (confirm) selects, B (back) steps out of the widget to the widget bar, and Guide closes the Game Bar. Under the hood these are keys (arrows, Tab/Shift+Tab, Enter, Ctrl+Tab), because the Game Bar ignores virtual Xbox pads.
 
@@ -28,7 +28,7 @@ Bindings are saved per game in `%APPDATA%\HotasBridge\<game>.json`, and app sett
 Implement `IGameAdapter` (config path, action list, input syntax, install, backups) and add it to `GameRegistry.All`. Device-specific defaults go in `Presets.BuiltIn`. Inputs are stored neutrally (`InputRef`: axis, button or hat plus direction), so the same physical binding can be written in each game's syntax.
 
 ## AC7 notes
-- AC7 reads Button1–32 and 4 hats. Detect refuses anything outside that range for AC7 actions (the row says why), and device cards grey out buttons 33 and up. System buttons can still use them.
+- AC7 reads Button1–32 and 4 hats. Detect refuses anything outside that range for AC7 actions (the row says why). Device cards split their buttons into the ones AC7 reads and the rest, which System buttons can still use.
 - AC7 only reads devices that Windows reports as a joystick, flight stick or 1st-person controller. Devices that report as a **gamepad** are ignored, and that includes the **VelocityOne Rudder** out of the box. Set the rudder to **Flight stick / yoke** on its card, then load the rudder preset. Its toe brakes (X, Y) stay available as axes. The Flightdeck Stick preset puts yaw on stick twist for anyone without pedals.
 - AC7's in-game controls menu only configures the Thrustmaster T.Flight HOTAS One. Other devices can only be set up through `Input.ini`, which is what this app writes.
 - Devices disagree about which way their axes count, and AC7 expects a particular direction for each action. For the throttle, lower values are faster. Detect asks for a movement and inverts the axis when needed; the Flightdeck Throttle, for example, needs `X:R`.
