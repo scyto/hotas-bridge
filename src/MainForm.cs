@@ -226,7 +226,7 @@ sealed class MainForm : Form
             gr.Cells["Inv"].Value = inverted ? "⇅ on" : "⇅";
             gr.Cells["Clear"].Value = "×";
             if (sys) { gr.Cells["Input"].ReadOnly = true; gr.Cells["Desc"].ToolTipText = gr.Cells["Key"].ToolTipText = SystemButtons.Tip(a); }
-            if (listening) gr.DefaultCellStyle.BackColor = Color.FromArgb(60, 42, 12);
+            if (listening) { gr.DefaultCellStyle.BackColor = Color.FromArgb(60, 42, 12); gr.Cells["Input"].ReadOnly = true; }
             if (a.Kind != ActionKind.Axis) gr.Cells["Inv"] = new DataGridViewTextBoxCell { Value = "" }; // only axes can be inverted
             else
             {
@@ -299,9 +299,18 @@ sealed class MainForm : Form
     void Grid_CellEndEdit(object? sender, DataGridViewCellEventArgs e)
     {
         if (_grid.Rows[e.RowIndex].Tag is not GameAction a || _grid.Columns[e.ColumnIndex].Name != "Input" || a.Group == SystemButtons.Group) return;
+        if (_listenKey == a.Key) { BeginInvoke(new Action(RefreshGrid)); return; } // the cell shows Detect's prompt, not a binding
         var text = (_grid.Rows[e.RowIndex].Cells[e.ColumnIndex].Value as string)?.Trim() ?? "";
         if (text.Length == 0) { _profile.Bindings.Remove(a.Key); }
-        else if (_profile.Bindings.TryGetValue(a.Key, out var b)) { b.Raw = text; }
+        else if (_adapter.CheckRaw(text) is { } why) { SetStatus(why + " Not saved.", true); BeginInvoke(new Action(RefreshGrid)); return; }
+        else if (_profile.Bindings.TryGetValue(a.Key, out var b))
+        {
+            b.Raw = text;
+            var over = System.Text.RegularExpressions.Regex.Matches(text, @"Button(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+                .Select(m => int.Parse(m.Groups[1].Value)).Where(n => n > _adapter.MaxButtons).ToList();
+            SetStatus(over.Count == 0 ? $"{a.Key} = {text}" :
+                $"{a.Key} = {text}. {GameShortName} is thought to read only buttons 1–{_adapter.MaxButtons}, so Button{over[0]} may do nothing: try it in-game.", over.Count > 0);
+        }
         else { SetStatus("Use Detect first so the binding knows which device it belongs to; then you can edit the text.", true); }
         SaveProfile();
         BeginInvoke(new Action(RefreshGrid));
@@ -623,7 +632,7 @@ sealed class MainForm : Form
     void ShowListenNote(string why)
     {
         foreach (DataGridViewRow r in _grid.Rows)
-            if (r.Tag is GameAction a && a.Key == _listenKey) { r.Cells["Input"].Value = "still waiting: " + why; break; }
+            if (r.Tag is GameAction a && a.Key == _listenKey) { r.Cells["Device"].Value = "still waiting: " + why; break; } // read-only cell
     }
 
     void SaveSettings()
@@ -681,8 +690,22 @@ sealed class MainForm : Form
             var item = new ToolStripMenuItem(Path.GetFileName(f));
             item.Click += (_, _) =>
             {
-                if (MessageBox.Show(this, $"Restore {Path.GetFileName(f)}?\n\nYour current file is backed up first.", "Restore", MessageBoxButtons.OKCancel) != DialogResult.OK) return;
-                try { _adapter.Restore(f); SetStatus($"Restored {Path.GetFileName(f)}."); RebuildDevices(); UpdateSync(); }
+                if (MessageBox.Show(this, $"Restore {Path.GetFileName(f)}?\n\nThe grid will show the bindings in that file. Your current " +
+                                          $"{Path.GetFileName(_adapter.ConfigPath)} and your current bindings are both backed up first.",
+                                    "Restore", MessageBoxButtons.OKCancel) != DialogResult.OK) return;
+                try
+                {
+                    var restored = _adapter.ReadBindings(f);
+                    var profileBackup = ProfileStore.Backup(_adapter.Id);
+                    _adapter.Restore(f);
+                    _listenKey = null;
+                    _profile.Bindings = restored;
+                    foreach (var b in restored.Values.Where(b => b.DeviceName.Length == 0)) // no ProductName line: name it from the device
+                        b.DeviceName = _di?.Devices.FirstOrDefault(d => d.Info.ProductGuid == b.DeviceProduct)?.Info.ProductName ?? "Unknown device";
+                    SyncBindingTypes(); SaveProfile(); RefreshGrid(); RebuildDevices(); UpdateSync();
+                    SetStatus($"Restored {Path.GetFileName(f)} and its {restored.Count} bindings." +
+                              (profileBackup.Length > 0 ? $" Your previous bindings are saved as {profileBackup}." : ""));
+                }
                 catch (Exception ex) { SetStatus("Restore failed: " + ex.Message, true); }
             };
             m.Items.Add(item);

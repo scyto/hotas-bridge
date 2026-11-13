@@ -66,6 +66,16 @@ public static class ProfileStore
         return new GameProfile { GameId = gameId };
     }
 
+    /// <summary>Copies the saved bindings to "&lt;game&gt;.json.bak-&lt;date-time&gt;" and returns that file name ("" if nothing was saved yet).</summary>
+    public static string Backup(string gameId)
+    {
+        var f = Path.Combine(Dir, gameId + ".json");
+        if (!File.Exists(f)) return "";
+        var bak = $"{f}.bak-{DateTime.Now:yyyyMMdd-HHmmss}";
+        File.Copy(f, bak, overwrite: true);
+        return Path.GetFileName(bak);
+    }
+
     public static void Save(GameProfile p)
     {
         Directory.CreateDirectory(Dir);

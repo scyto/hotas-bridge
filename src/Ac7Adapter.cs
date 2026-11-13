@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace HotasBridge;
 
@@ -104,6 +105,53 @@ public sealed class Ac7Adapter : IGameAdapter
     }
 
     static string Header(Guid product) => "Joystick-" + product.ToString().ToUpperInvariant();
+
+    // ---- typed bindings, and reading bindings back from a file ----
+    static readonly Regex Token = new(@"^(?:X|Y|Z|Rx|Ry|Rz|Slider[12]|POV_[UDLR][1-4]|Button\d{1,3})(?::[PNRC])*$", RegexOptions.IgnoreCase);
+
+    /// <summary>Inputs (X … Slider2, POV_U1 … POV_R4, ButtonN) with modifiers :P :N :R :C, joined by &amp; ! + &gt; &lt;.
+    /// Buttons above 32 pass, so they can be tried in-game (the 32 limit is unverified).</summary>
+    public string? CheckRaw(string text)
+    {
+        var parts = Regex.Split(text.Trim(), @"\s*[&!+<>]\s*").Where(p => p.Length > 0).ToList();
+        if (parts.Count == 0) return "That's empty.";
+        var bad = parts.FirstOrDefault(p => !Token.IsMatch(p));
+        return bad == null ? null : $"\"{bad}\" isn't AC7 binding syntax (e.g. Button3, POV_U1, Y:R).";
+    }
+
+    /// <summary>Simple values become inputs (as Detect would make them); anything else is kept as typed text. The profile holds
+    /// one binding per action, so if several devices bind the same action, the first section wins.</summary>
+    public Dictionary<string, Binding> ReadBindings(string path)
+    {
+        var result = new Dictionary<string, Binding>();
+        var keys = Actions.ToDictionary(a => a.Key, a => a.Key, StringComparer.OrdinalIgnoreCase);
+        foreach (var s in Parse(File.ReadAllText(path)))
+        {
+            if (s.Header == null || !s.Header.StartsWith("Joystick-", StringComparison.OrdinalIgnoreCase) || !Guid.TryParse(s.Header[9..], out var product)) continue;
+            string name = s.Lines.Where(l => KeyOf(l).Equals("ProductName", StringComparison.OrdinalIgnoreCase)).Select(ValOf).FirstOrDefault() ?? "";
+            foreach (var l in s.Lines)
+            {
+                if (!keys.TryGetValue(KeyOf(l), out var key) || result.ContainsKey(key)) continue;
+                var v = ValOf(l);
+                if (v.Length == 0) continue;
+                var input = ParseInput(v);
+                if (input == null && CheckRaw(v) != null) continue; // not a binding AC7 could read (e.g. stray text)
+                result[key] = new Binding { DeviceProduct = product, DeviceName = name, Input = input, Raw = input == null ? v : null };
+            }
+        }
+        return result;
+    }
+
+    static InputRef? ParseInput(string v)
+    {
+        var m = Regex.Match(v, @"^(X|Y|Z|Rx|Ry|Rz|Slider1|Slider2)(:R)?$", RegexOptions.IgnoreCase);
+        if (m.Success) return new InputRef(InputKind.Axis, Array.FindIndex(InputRef.AxisNames, n => n.Equals(m.Groups[1].Value, StringComparison.OrdinalIgnoreCase)), '\0', m.Groups[2].Success);
+        m = Regex.Match(v, @"^Button(\d{1,3})$", RegexOptions.IgnoreCase);
+        if (m.Success && int.Parse(m.Groups[1].Value) is var n and >= 1 and <= 128) return new InputRef(InputKind.Button, n - 1);
+        m = Regex.Match(v, @"^POV_([UDLR])([1-4])$", RegexOptions.IgnoreCase);
+        if (m.Success) return new InputRef(InputKind.Pov, int.Parse(m.Groups[2].Value) - 1, char.ToUpperInvariant(m.Groups[1].Value[0]));
+        return null;
+    }
 
     // ---- ini model that preserves everything it doesn't touch ----
     sealed class Section { public string? Header; public List<string> Lines = new(); }
