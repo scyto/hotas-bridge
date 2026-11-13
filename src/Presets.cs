@@ -29,7 +29,8 @@ public static class Presets
             ["Flight_Flare"] = B(8),              // thumb wheel click
             ["Flight_AccelerationDeceleration"] = B(10), // pinkie lever
             // 31 and 32 sit either side of START (22) like an Xbox pad's View and Menu either side of Guide, and do
-            // what those do in AC7: View = radar map, Menu = pause. AC7 can't read Guide, so 22 is the system Guide button.
+            // what those do in AC7: View = radar map, Menu = pause. AC7 can't read Guide or Share, so those are system
+            // buttons: Guide on 22, Share on 33 (AC7 can't read 33 either, but HOTAS Bridge can).
             ["Flight_View"] = B(4), ["Flight_Radar"] = B(31), ["Flight_AutoPilot"] = B(7),
             ["Flight_Pause"] = B(32),
             ["Flight_HatSwitchUp"] = H(1, 'U'), ["Flight_HatSwitchDown"] = H(1, 'D'),
@@ -40,7 +41,7 @@ public static class Presets
             ["UI_Menu"] = B(32),                  // AC7 has no menu action for View
             ["UI_LeftStickUp"] = H(1, 'U'), ["UI_LeftStickDown"] = H(1, 'D'),
             ["UI_LeftStickLeft"] = H(1, 'L'), ["UI_LeftStickRight"] = H(1, 'R'),
-        }, Guide: B(22)),                         // base START
+        }, System: new Dictionary<string, InputRef> { ["Guide"] = B(22), ["Share"] = B(33) }),
         new Preset("VelocityOne Rudder – yaw (set it to report as Flight)", "ac7", VelocityOneRudder, "VelocityOne Rudder", new Dictionary<string, InputRef>
         {
             ["Flight_Yaw"] = A(2),                // rudder; confirmed in-game once the rudder reports as Flight

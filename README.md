@@ -12,7 +12,11 @@ Double-click `build.cmd` (needs the .NET 8 SDK). The exe ends up in `out\HotasBr
 4. For anything else, click **Detect** on a row, then press a button or push a hat. Short pulses are caught too, such as the thumb wheel in buttons mode. For an axis, Detect asks for a movement, e.g. *push the throttle forward, starting from the back*, and sets the direction from it, because devices disagree about which way is positive. Click **⇅** to flip an axis by hand.
 5. **Back up & overwrite** copies the current file to `Input.ini.bak-<date-time>`, then writes the new one. **Restore ▾** brings a backup back, and backs up the current file first. Next to the file path, **✓ matches your bindings** or **● N changes not written yet** says whether the file has what the grid shows; hover it to see the changes. Write with the game closed, since AC7 rewrites `Input.ini` when it exits.
 
-**System → Guide** (at the bottom of the grid) works in every game: while HOTAS Bridge is running (minimized is fine), that button presses Win+G, which opens the Xbox Game Bar like Guide on an Xbox controller. Games can't bind Guide themselves, because Windows handles it and the game never sees it. The Flightdeck Stick preset puts it on START (Button22).
+**System** (at the bottom of the grid) holds the Xbox controller's Guide and Share buttons. Games can't bind those, because Windows handles them and the game never sees them, so HOTAS Bridge presses them for you while it's running (minimized is fine), in every game:
+- **Guide**: Win+G, which opens the Xbox Game Bar.
+- **Share**: a tap takes a screenshot (Win+Alt+PrtScn); holding it saves the last 30 seconds (Win+Alt+G, if Game Bar's background recording is on).
+
+System buttons can be any button, including ones the game can't read (greyed on the device cards). The Flightdeck Stick preset puts Guide on START (22) and Share on 33.
 
 **Text size ▾** makes the whole window bigger (100–200%), on top of Windows' display scaling. It applies straight away and is remembered.
 
@@ -22,7 +26,7 @@ Bindings are saved per game in `%APPDATA%\HotasBridge\<game>.json`, and app sett
 Implement `IGameAdapter` (config path, action list, input syntax, install, backups) and add it to `GameRegistry.All`. Device-specific defaults go in `Presets.BuiltIn`. Inputs are stored neutrally (`InputRef`: axis, button or hat plus direction), so the same physical binding can be written in each game's syntax.
 
 ## AC7 notes
-- AC7 reads Button1–32 and 4 hats. The app refuses anything outside that range.
+- AC7 reads Button1–32 and 4 hats. Detect refuses anything outside that range for AC7 actions (the row says why), and device cards grey out buttons 33 and up. System buttons can still use them.
 - AC7 only reads devices that Windows reports as a joystick, flight stick or 1st-person controller. Devices that report as a **gamepad** are ignored, and that includes the **VelocityOne Rudder** out of the box. Set the rudder to **Flight stick / yoke** on its card, then load the rudder preset. Its toe brakes (X, Y) stay available as axes. The Flightdeck Stick preset puts yaw on stick twist for anyone without pedals.
 - AC7's in-game controls menu only configures the Thrustmaster T.Flight HOTAS One. Other devices can only be set up through `Input.ini`, which is what this app writes.
 - Devices disagree about which way their axes count, and AC7 expects a particular direction for each action. For the throttle, lower values are faster. Detect asks for a movement and inverts the axis when needed; the Flightdeck Throttle, for example, needs `X:R`.

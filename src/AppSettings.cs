@@ -8,8 +8,8 @@ public sealed class AppSettings
     /// <summary>Text size, 1 = 100% (see Theme.TextScales).</summary>
     public float TextScale { get; set; } = 1f;
 
-    /// <summary>The button HOTAS Bridge turns into Guide while it runs (SystemButtons); null = none.</summary>
-    public SystemBinding? Guide { get; set; }
+    /// <summary>Buttons HOTAS Bridge acts on while it runs, keyed by SystemButtons action key ("Guide", "Share").</summary>
+    public Dictionary<string, SystemBinding> System { get; set; } = new();
 
     static readonly string FilePath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "HotasBridge", "settings.json");
