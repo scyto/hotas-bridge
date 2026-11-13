@@ -176,10 +176,13 @@ sealed class MainForm : Form
         g.ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle { BackColor = Theme.Panel2, ForeColor = Theme.Amber, Font = Theme.UiBold, SelectionBackColor = Theme.Panel2 };
         g.DefaultCellStyle = new DataGridViewCellStyle { BackColor = Theme.Panel, ForeColor = Theme.Text, SelectionBackColor = Color.FromArgb(60, 45, 20), SelectionForeColor = Theme.Text, Font = Theme.Ui };
         g.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill; // row heights: ApplyGridMetrics
-        g.Columns.Add(new DataGridViewTextBoxColumn { Name = "Desc", HeaderText = "Action", ReadOnly = true, FillWeight = 26 });
-        g.Columns.Add(new DataGridViewTextBoxColumn { Name = "Device", HeaderText = "Device", ReadOnly = true, FillWeight = 19 });
-        g.Columns.Add(new DataGridViewTextBoxColumn { Name = "Input", HeaderText = "Binding (editable)", FillWeight = 17, DefaultCellStyle = { Font = Theme.Mono } });
-        g.Columns.Add(new DataGridViewTextBoxColumn { Name = "Key", HeaderText = "INI file", ReadOnly = true, FillWeight = 23, DefaultCellStyle = { Font = Theme.Mono, ForeColor = Theme.Dim },
+        g.Columns.Add(new DataGridViewTextBoxColumn { Name = "Desc", HeaderText = "Action", ReadOnly = true, FillWeight = 22 });
+        g.Columns.Add(new DataGridViewTextBoxColumn { Name = "Device", HeaderText = "Device", ReadOnly = true, FillWeight = 16 });
+        g.Columns.Add(new DataGridViewTextBoxColumn { Name = "Control", HeaderText = "Control", ReadOnly = true, FillWeight = 18,
+                                                      ToolTipText = "What the bound control is on the device (from the maker's guide)" });
+        g.Columns.Add(new DataGridViewTextBoxColumn { Name = "Input", HeaderText = "Binding", FillWeight = 15, DefaultCellStyle = { Font = Theme.Mono },
+                                                      ToolTipText = "Editable: type the game's syntax, e.g. Button3, POV_U1, Y:R" });
+        g.Columns.Add(new DataGridViewTextBoxColumn { Name = "Key", HeaderText = "INI file", ReadOnly = true, FillWeight = 20, DefaultCellStyle = { Font = Theme.Mono, ForeColor = Theme.Dim },
                                                       ToolTipText = "The setting's name in the game's file (n/a: HOTAS Bridge handles it itself)" });
         g.Columns.Add(new DataGridViewButtonColumn { Name = "Detect", HeaderText = "Detect", ToolTipText = "Click, then press a button, push a hat or move an axis to bind it", UseColumnTextForButtonValue = false, FillWeight = 9, FlatStyle = FlatStyle.Flat });
         g.Columns.Add(new DataGridViewButtonColumn { Name = "Inv", HeaderText = "Invert", ToolTipText = "Flip an axis's direction (AC7 writes it as :R)", FillWeight = 7, FlatStyle = FlatStyle.Flat });
@@ -220,6 +223,7 @@ sealed class MainForm : Form
             gr.Tag = a;
             gr.Cells["Desc"].Value = a.Description + (a.Kind == ActionKind.Axis ? "  ·axis" : "");
             gr.Cells["Device"].Value = b?.DeviceName ?? "";
+            gr.Cells["Control"].Value = b is { Raw: null, Input: { } bound } ? ControlNames.For(b.DeviceProduct, bound) ?? "" : "";
             gr.Cells["Input"].Value = listening ? "waiting for input…" : inputText;
             gr.Cells["Key"].Value = sys ? "n/a" : a.Key;
             gr.Cells["Detect"].Value = listening ? "Press…" : "Detect";
