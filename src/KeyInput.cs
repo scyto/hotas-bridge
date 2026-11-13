@@ -5,7 +5,7 @@ namespace HotasBridge;
 /// <summary>Presses keys as if typed (SendInput): system buttons and Game Bar navigation.</summary>
 static class KeyInput
 {
-    public const ushort Tab = 0x09, Enter = 0x0D, Shift = 0x10, Alt = 0x12, Escape = 0x1B,
+    public const ushort Tab = 0x09, Enter = 0x0D, Shift = 0x10, Ctrl = 0x11, Alt = 0x12, Escape = 0x1B,
                         Left = 0x25, Up = 0x26, Right = 0x27, Down = 0x28, PrintScreen = 0x2C, G = 0x47, Win = 0x5B;
 
     /// <summary>Presses the keys in order, then releases them in reverse (e.g. Win, G = Win+G). Returns how many key events

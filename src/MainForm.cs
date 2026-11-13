@@ -512,13 +512,13 @@ sealed class MainForm : Form
     // the Game Bar too, the way a pad does: Left/Right move along the widget bar (each widget opens as you land on it),
     // Down goes into the widget and down through it. With keys, only the widget bar answers the arrow keys; inside a
     // widget, moving between items is Tab / Shift+Tab, so Up/Down send those. Directions repeat while held.
-    // Back isn't mapped: the only key for it is Esc, which closes the whole Game Bar (a pad's B only steps back), and the
-    // Flightdeck pinkie lever presses B partway through its pull, so it closed by accident. Guide closes the Game Bar instead.
+    // Back is Ctrl+Tab, which steps out of a widget to the widget bar (found by the user), like a pad's B. Not Esc: that closes
+    // the whole Game Bar, and the Flightdeck pinkie lever presses B partway through its pull. Guide closes the Game Bar.
     static readonly Dictionary<MenuNav, ushort[]> NavKeys = new()
     {
         [MenuNav.Up] = new[] { KeyInput.Shift, KeyInput.Tab }, [MenuNav.Down] = new[] { KeyInput.Tab },
         [MenuNav.Left] = new[] { KeyInput.Left }, [MenuNav.Right] = new[] { KeyInput.Right },
-        [MenuNav.Confirm] = new[] { KeyInput.Enter },
+        [MenuNav.Confirm] = new[] { KeyInput.Enter }, [MenuNav.Back] = new[] { KeyInput.Ctrl, KeyInput.Tab },
         [MenuNav.Prev] = new[] { KeyInput.Left }, [MenuNav.Next] = new[] { KeyInput.Right }, // previous / next widget
     };
     const long NavRepeatDelayMs = 400, NavRepeatMs = 110, GameBarCheckMs = 100;
@@ -540,7 +540,7 @@ sealed class MainForm : Form
         if (open == _gameBarOpen) return;
         if (!open) _ignoreDirectInputUntil = now + ReplayGuardMs;
         _gameBarOpen = open;
-        SetStatus(open ? "Game Bar open: your menu buttons drive it (left/right, up/down, A to select; Guide closes it)." : "Game Bar closed.");
+        SetStatus(open ? "Game Bar open: your menu buttons drive it (left/right, up/down, A selects, B backs out; Guide closes it)." : "Game Bar closed.");
     }
     const long ReplayGuardMs = 1500;
     long _ignoreDirectInputUntil;
