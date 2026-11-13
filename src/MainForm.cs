@@ -20,6 +20,7 @@ sealed class MainForm : Form
     readonly ContextMenuStrip _presetMenu = new(), _restoreMenu = new(), _textMenu = new() { ShowCheckMargin = true, ShowImageMargin = false };
     Button _btnInstall = null!;
     DirectInputService? _di;
+    RawHidInput? _raw; // buttons and hats while the Game Bar has paused DirectInput
     IGameAdapter _adapter = GameRegistry.All[0];
     GameProfile _profile = new();
 
@@ -88,13 +89,14 @@ sealed class MainForm : Form
             ApplyGridMetrics();
             try { _di = new DirectInputService(Handle); }
             catch (Exception ex) { SetStatus("DirectInput failed to start: " + ex.Message, true); }
+            try { _raw = new RawHidInput(); } catch { } // only needed while the Game Bar is open
             RebuildDevices(); LoadGame();
             _timer.Tick += (_, _) => Tick();
             _timer.Start();
             _syncTimer.Tick += (_, _) => UpdateSync();
             _syncTimer.Start();
         };
-        FormClosed += (_, _) => { _timer.Stop(); _syncTimer.Stop(); _di?.Dispose(); };
+        FormClosed += (_, _) => { _timer.Stop(); _syncTimer.Stop(); _di?.Dispose(); _raw?.Dispose(); };
     }
 
     static Button MakeButton(string text, bool primary) => new()
@@ -476,8 +478,10 @@ sealed class MainForm : Form
     {
         if (_di == null) return;
         _di.PollAll();
+        UpdateGameBarState();
         FireSystemButtons(); // before CheckListen, so the press that Detect binds to Guide doesn't also fire it
         DriveGameBar();
+        _raw?.ClearPressed();
         CheckListen();
         foreach (Control c in _devices.Controls) c.Invalidate();
     }
@@ -516,18 +520,29 @@ sealed class MainForm : Form
     bool _gameBarOpen;
     long _gameBarCheckAt;
 
+    /// <summary>Whether the Game Bar is open. While it is, Windows pauses DirectInput for other apps and replays the
+    /// queued presses when it closes (measured), so system buttons and navigation read Raw Input instead, and DirectInput
+    /// presses are ignored for a moment after it closes so the replay can't reopen it.</summary>
+    void UpdateGameBarState()
+    {
+        long now = Environment.TickCount64;
+        if (now < _gameBarCheckAt) return;
+        _gameBarCheckAt = now + GameBarCheckMs;
+        bool open = GameBarState.IsInputRedirected;
+        if (GameBarState.Problem is { } problem && !_gameBarProblemShown)
+        { _gameBarProblemShown = true; SetStatus("Can't tell when the Game Bar is open, so the stick won't drive it: " + problem, true); }
+        if (open == _gameBarOpen) return;
+        if (!open) _ignoreDirectInputUntil = now + ReplayGuardMs;
+        _gameBarOpen = open;
+        SetStatus(open ? "Game Bar open: your menu buttons drive it (arrows, Enter, Esc, Tab)." : "Game Bar closed.");
+    }
+    const long ReplayGuardMs = 1500;
+    long _ignoreDirectInputUntil;
+
     void DriveGameBar()
     {
         long now = Environment.TickCount64;
-        if (now >= _gameBarCheckAt)
-        {
-            bool open = GameBarState.IsInputRedirected;
-            if (GameBarState.Problem is { } problem && !_gameBarProblemShown)
-            { _gameBarProblemShown = true; SetStatus("Can't tell when the Game Bar is open, so the stick won't drive it: " + problem, true); }
-            if (open != _gameBarOpen) SetStatus(open ? "Game Bar open: your menu buttons drive it (arrows, Enter, Esc, Tab)." : "Game Bar closed.");
-            _gameBarOpen = open; _gameBarCheckAt = now + GameBarCheckMs;
-        }
-        if (!_gameBarOpen || _listenKey != null || _di == null) { _navNextRepeat.Clear(); return; }
+        if (!_gameBarOpen || _listenKey != null || _raw == null) { _navNextRepeat.Clear(); return; }
         foreach (var (nav, keys) in NavKeys)
         {
             bool held = _adapter.Actions.Any(a => a.Nav == nav && _profile.Bindings.TryGetValue(a.Key, out var b) && IsHeld(b));
@@ -545,16 +560,15 @@ sealed class MainForm : Form
     }
     bool _gameBarProblemShown;
 
-    /// <summary>Whether a binding's control is held now (or was tapped since the last poll).</summary>
+    /// <summary>Whether a binding's control is held now (or was tapped since the last tick), from Raw Input: only used while
+    /// the Game Bar is open, when DirectInput is paused.</summary>
     bool IsHeld(Binding b)
     {
-        if (b.Raw != null || b.Input is not { } i) return false;
-        var s = _di?.Devices.FirstOrDefault(x => x.Info.ProductGuid == b.DeviceProduct)?.State;
-        if (s == null) return false;
+        if (b.Raw != null || b.Input is not { } i || _raw == null || !_raw.States.TryGetValue(b.DeviceProduct, out var s)) return false;
         return i.Kind switch
         {
             InputKind.Button => i.Index < s.Buttons.Length && (s.Buttons[i.Index] || s.Pressed.Contains(i.Index)),
-            InputKind.Pov => i.Index < s.PovCount && DirectInputService.PovDir(s.Pov[i.Index]) == i.Direction,
+            InputKind.Pov => i.Index < s.Pov.Length && DirectInputService.PovDir(s.Pov[i.Index]) == i.Direction,
             _ => false
         };
     }
@@ -563,6 +577,10 @@ sealed class MainForm : Form
     (bool pressed, bool down)? SystemState(GameAction a)
     {
         if (!_settings.System.TryGetValue(a.Key, out var g)) return null;
+        if (_gameBarOpen) // DirectInput is paused: read Raw Input
+            return _raw != null && _raw.States.TryGetValue(g.DeviceProduct, out var r) && g.Button >= 0 && g.Button < r.Buttons.Length
+                ? (r.Pressed.Contains(g.Button), r.Buttons[g.Button]) : null;
+        if (Environment.TickCount64 < _ignoreDirectInputUntil) return null; // DirectInput replaying what was queued while it was open
         var d = _di?.Devices.FirstOrDefault(x => x.Info.ProductGuid == g.DeviceProduct);
         if (d == null || g.Button < 0 || g.Button >= d.State.Buttons.Length) return null;
         return (d.State.Pressed.Contains(g.Button), d.State.Buttons[g.Button]);
