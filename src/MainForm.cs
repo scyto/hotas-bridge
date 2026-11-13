@@ -11,6 +11,8 @@ sealed class MainForm : Form
     readonly System.Windows.Forms.Timer _syncTimer = new() { Interval = 2000 }; // the game rewrites the file when it exits
     readonly FlowLayoutPanel _devices = new() { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true, Padding = new Padding(12), BackColor = Theme.Panel };
     readonly DataGridView _grid = new();
+    readonly FlowLayoutPanel _tabs = new() { Dock = DockStyle.Top, AutoSize = true, WrapContents = true, BackColor = Theme.Panel, Padding = new Padding(0, 0, 0, 8) };
+    string _tab = ""; // the action group shown in the grid
     readonly ToolStripStatusLabel _status = new() { Spring = true, TextAlign = ContentAlignment.MiddleLeft };
     readonly System.Windows.Forms.Timer _timer = new() { Interval = 15 };
     readonly AppSettings _settings;
@@ -68,7 +70,7 @@ sealed class MainForm : Form
         // SplitterDistance is set in Load: here the container still has its default ~150px width and WinForms clamps it
         _split.Panel1.Controls.Add(_devices);
         var right = new Panel { Dock = DockStyle.Fill, Padding = new Padding(12), BackColor = Theme.Panel };
-        right.Controls.Add(_grid);
+        right.Controls.Add(_grid); right.Controls.Add(_tabs); // the tab strip docks above the grid
         _split.Panel2.Controls.Add(right);
 
         _strip.Items.Add(_status);
@@ -159,7 +161,8 @@ sealed class MainForm : Form
         // assign new styles: DataGridView's DefaultCellStyle getter can return a temporary copy, so setting .Font on it does nothing
         _grid.ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle(_grid.ColumnHeadersDefaultCellStyle) { Font = Theme.UiBold };
         _grid.DefaultCellStyle = new DataGridViewCellStyle(_grid.DefaultCellStyle) { Font = Theme.Ui };
-        foreach (var name in new[] { "Action", "Input" })
+        StyleTabs();
+        foreach (var name in new[] { "Key", "Input" })
             _grid.Columns[name].DefaultCellStyle = new DataGridViewCellStyle(_grid.Columns[name].DefaultCellStyle) { Font = Theme.Mono };
     }
 
@@ -173,10 +176,11 @@ sealed class MainForm : Form
         g.ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle { BackColor = Theme.Panel2, ForeColor = Theme.Amber, Font = Theme.UiBold, SelectionBackColor = Theme.Panel2 };
         g.DefaultCellStyle = new DataGridViewCellStyle { BackColor = Theme.Panel, ForeColor = Theme.Text, SelectionBackColor = Color.FromArgb(60, 45, 20), SelectionForeColor = Theme.Text, Font = Theme.Ui };
         g.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill; // row heights: ApplyGridMetrics
-        g.Columns.Add(new DataGridViewTextBoxColumn { Name = "Action", HeaderText = "Action", ReadOnly = true, FillWeight = 24, DefaultCellStyle = { Font = Theme.Mono } });
-        g.Columns.Add(new DataGridViewTextBoxColumn { Name = "Desc", HeaderText = "What it does", ReadOnly = true, FillWeight = 22, DefaultCellStyle = { ForeColor = Theme.Dim } });
-        g.Columns.Add(new DataGridViewTextBoxColumn { Name = "Device", HeaderText = "Device", ReadOnly = true, FillWeight = 20 });
-        g.Columns.Add(new DataGridViewTextBoxColumn { Name = "Input", HeaderText = "Binding (editable)", FillWeight = 18, DefaultCellStyle = { Font = Theme.Mono } });
+        g.Columns.Add(new DataGridViewTextBoxColumn { Name = "Desc", HeaderText = "Action", ReadOnly = true, FillWeight = 26 });
+        g.Columns.Add(new DataGridViewTextBoxColumn { Name = "Device", HeaderText = "Device", ReadOnly = true, FillWeight = 19 });
+        g.Columns.Add(new DataGridViewTextBoxColumn { Name = "Input", HeaderText = "Binding (editable)", FillWeight = 17, DefaultCellStyle = { Font = Theme.Mono } });
+        g.Columns.Add(new DataGridViewTextBoxColumn { Name = "Key", HeaderText = "INI file", ReadOnly = true, FillWeight = 23, DefaultCellStyle = { Font = Theme.Mono, ForeColor = Theme.Dim },
+                                                      ToolTipText = "The setting's name in the game's file (n/a: HOTAS Bridge handles it itself)" });
         g.Columns.Add(new DataGridViewButtonColumn { Name = "Detect", HeaderText = "Detect", ToolTipText = "Click, then press a button, push a hat or move an axis to bind it", UseColumnTextForButtonValue = false, FillWeight = 9, FlatStyle = FlatStyle.Flat });
         g.Columns.Add(new DataGridViewButtonColumn { Name = "Inv", HeaderText = "Invert", ToolTipText = "Flip an axis's direction (AC7 writes it as :R)", FillWeight = 7, FlatStyle = FlatStyle.Flat });
         g.Columns.Add(new DataGridViewButtonColumn { Name = "Clear", HeaderText = "Clear", ToolTipText = "Remove the binding", FillWeight = 6, FlatStyle = FlatStyle.Flat });
@@ -204,28 +208,24 @@ sealed class MainForm : Form
     void RefreshGrid()
     {
         _grid.Rows.Clear();
-        string? group = null;
-        foreach (var a in GridActions)
+        foreach (var a in GridActions.Where(a => a.Group == _tab))
         {
-            if (a.Group != group)
-            {
-                group = a.Group;
-                int hr = _grid.Rows.Add(a.Group.ToUpperInvariant(), "", "", "", "", "", "");
-                var row = _grid.Rows[hr]; row.Tag = null; row.ReadOnly = true;
-                row.DefaultCellStyle = new DataGridViewCellStyle { BackColor = Theme.Bg, ForeColor = Theme.Amber, Font = Theme.UiBold, SelectionBackColor = Theme.Bg };
-                foreach (var col in new[] { "Detect", "Inv", "Clear" }) row.Cells[col] = new DataGridViewTextBoxCell { Value = "" }; // no buttons on group rows
-            }
             bool sys = a.Group == SystemButtons.Group;
             var b = sys ? SystemBindingFor(a) : _profile.Bindings.GetValueOrDefault(a.Key);
             string inputText = b == null ? "" : sys ? $"Button{b.Input!.Index + 1}" : (b.Raw ?? (b.Input != null ? _adapter.Format(b.Input) ?? "(unsupported)" : ""));
             if (b != null && !sys && _adapter.UnsupportedDevice(b.DeviceType, b.DeviceName) != null) inputText = "(device ignored by game) " + inputText;
             bool listening = _listenKey == a.Key;
             bool inverted = b?.Raw == null && b?.Input is { Kind: InputKind.Axis, Invert: true };
-            int r = _grid.Rows.Add(a.Key, a.Description + (a.Kind == ActionKind.Axis ? "  ·axis" : ""), b?.DeviceName ?? "",
-                listening ? "waiting for input…" : inputText, listening ? "Press…" : "Detect", inverted ? "⇅ on" : "⇅", "×");
-            var gr = _grid.Rows[r];
+            var gr = _grid.Rows[_grid.Rows.Add()];
             gr.Tag = a;
-            if (sys) { gr.Cells["Input"].ReadOnly = true; gr.Cells["Action"].ToolTipText = gr.Cells["Desc"].ToolTipText = SystemButtons.Tip(a); }
+            gr.Cells["Desc"].Value = a.Description + (a.Kind == ActionKind.Axis ? "  ·axis" : "");
+            gr.Cells["Device"].Value = b?.DeviceName ?? "";
+            gr.Cells["Input"].Value = listening ? "waiting for input…" : inputText;
+            gr.Cells["Key"].Value = sys ? "n/a" : a.Key;
+            gr.Cells["Detect"].Value = listening ? "Press…" : "Detect";
+            gr.Cells["Inv"].Value = inverted ? "⇅ on" : "⇅";
+            gr.Cells["Clear"].Value = "×";
+            if (sys) { gr.Cells["Input"].ReadOnly = true; gr.Cells["Desc"].ToolTipText = gr.Cells["Key"].ToolTipText = SystemButtons.Tip(a); }
             if (listening) gr.DefaultCellStyle.BackColor = Color.FromArgb(60, 42, 12);
             if (a.Kind != ActionKind.Axis) gr.Cells["Inv"] = new DataGridViewTextBoxCell { Value = "" }; // only axes can be inverted
             else
@@ -235,6 +235,36 @@ sealed class MainForm : Form
                 if (inverted) inv.Style = new DataGridViewCellStyle(inv.InheritedStyle) { ForeColor = Theme.Amber, Font = Theme.UiBold };
             }
             if (b == null) gr.Cells["Clear"] = new DataGridViewTextBoxCell { Value = "" }; // nothing to clear
+        }
+    }
+
+    // ---------- tabs: one per action group (the game's, e.g. Flight / Menus, then System) ----------
+    void RebuildTabs()
+    {
+        var groups = GridActions.Select(a => a.Group).Distinct().ToList();
+        if (!groups.Contains(_tab)) _tab = groups.FirstOrDefault() ?? "";
+        _tabs.SuspendLayout();
+        foreach (var c in _tabs.Controls.Cast<Control>().ToList()) c.Dispose();
+        foreach (var group in groups)
+        {
+            var t = MakeButton(group, false);
+            t.Margin = new Padding(0, 0, 6, 0); t.Tag = group;
+            t.Click += (_, _) => { _tab = group; StyleTabs(); RefreshGrid(); };
+            _tabs.Controls.Add(t);
+        }
+        StyleTabs();
+        _tabs.ResumeLayout();
+    }
+
+    void StyleTabs()
+    {
+        foreach (var t in _tabs.Controls.OfType<Button>())
+        {
+            bool on = (string)t.Tag! == _tab;
+            t.BackColor = on ? Theme.Panel2 : Theme.Panel;
+            t.ForeColor = on ? Theme.Amber : Theme.Dim;
+            t.FlatAppearance.BorderColor = on ? Theme.Amber : Theme.Line;
+            t.Font = on ? Theme.UiBold : Theme.Ui;
         }
     }
 
@@ -607,7 +637,7 @@ sealed class MainForm : Form
         _profile = ProfileStore.Load(_adapter.Id);
         SyncBindingTypes(); // older profiles have no device type, and a device's type can be changed
         _path.Text = _adapter.ConfigPath + (File.Exists(_adapter.ConfigPath) ? "" : "   (not found: run the game once with your devices connected)");
-        RefreshGrid(); RebuildDevices(); UpdateSync();
+        RebuildTabs(); RefreshGrid(); RebuildDevices(); UpdateSync();
         SetStatus($"{_adapter.Name}: {_profile.Bindings.Count} bindings loaded.");
     }
 
