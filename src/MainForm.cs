@@ -20,9 +20,12 @@ sealed class MainForm : Form
 
     public MainForm()
     {
+        // Sizes below are 96-DPI values; WinForms scales the controls to the monitor's DPI (PerMonitorV2, see csproj).
+        AutoScaleDimensions = new SizeF(96F, 96F);
+        AutoScaleMode = AutoScaleMode.Dpi;
         Text = "HOTAS Bridge";
         BackColor = Theme.Bg; ForeColor = Theme.Text; Font = Theme.Ui;
-        MinimumSize = new Size(1100, 700); Size = new Size(1400, 900); StartPosition = FormStartPosition.CenterScreen;
+        StartPosition = FormStartPosition.CenterScreen; // size is set in Load, once the monitor DPI is known
 
         // ---- top bar ----
         var top = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 54, Padding = new Padding(12, 12, 12, 6), BackColor = Theme.Bg, WrapContents = false };
@@ -43,7 +46,7 @@ sealed class MainForm : Form
         var btnFolder = MakeButton("Open folder", false);
         btnFolder.Click += (_, _) => { var d = Path.GetDirectoryName(_adapter.ConfigPath)!; if (Directory.Exists(d)) Process.Start("explorer.exe", d); };
         var btnRefresh = MakeButton("Rescan devices", false);
-        btnRefresh.Click += (_, _) => { _di?.Refresh(); RebuildDevices(); };
+        btnRefresh.Click += (_, _) => { _di?.Refresh(); SyncBindingTypes(); RebuildDevices(); RefreshGrid(); };
         top.Controls.AddRange(new Control[] { title, _game, btnPreset, btnInstall, btnRestore, btnPreview, btnFolder, btnRefresh });
 
         var pathBar = new Panel { Dock = DockStyle.Top, Height = 22, Padding = new Padding(14, 0, 0, 0), BackColor = Theme.Bg };
@@ -52,7 +55,8 @@ sealed class MainForm : Form
         // ---- grid ----
         SetupGrid();
 
-        var split = new SplitContainer { Dock = DockStyle.Fill, SplitterDistance = 460, BackColor = Theme.Line, FixedPanel = FixedPanel.Panel1 };
+        // SplitterDistance is set in Load: here the container still has its default ~150px width and WinForms clamps it
+        var split = new SplitContainer { Dock = DockStyle.Fill, BackColor = Theme.Line, FixedPanel = FixedPanel.Panel1 };
         split.Panel1.Controls.Add(_devices);
         var right = new Panel { Dock = DockStyle.Fill, Padding = new Padding(12), BackColor = Theme.Panel };
         right.Controls.Add(_grid);
@@ -62,10 +66,18 @@ sealed class MainForm : Form
         strip.Items.Add(_status);
 
         Controls.Add(split); Controls.Add(pathBar); Controls.Add(top); Controls.Add(strip);
-        _devices.SizeChanged += (_, _) => { foreach (Control c in _devices.Controls) c.Width = _devices.ClientSize.Width - 24; };
+        _devices.SizeChanged += (_, _) => { foreach (Control c in _devices.Controls) c.Width = CardWidth; };
+        DpiChanged += (_, _) => BeginInvoke(new Action(() => { ApplyGridMetrics(); RefreshGrid(); }));
 
         Load += (_, _) =>
         {
+            // size for this monitor's DPI, but never bigger than its working area
+            var wa = Screen.FromControl(this).WorkingArea;
+            MinimumSize = new Size(Math.Min(LogicalToDeviceUnits(1000), wa.Width), Math.Min(LogicalToDeviceUnits(640), wa.Height));
+            Size = new Size(Math.Min(LogicalToDeviceUnits(1400), wa.Width * 19 / 20), Math.Min(LogicalToDeviceUnits(900), wa.Height * 19 / 20));
+            CenterToScreen();
+            split.SplitterDistance = Math.Min(LogicalToDeviceUnits(480), split.Width / 2);
+            ApplyGridMetrics();
             try { _di = new DirectInputService(Handle); }
             catch (Exception ex) { SetStatus("DirectInput failed to start: " + ex.Message, true); }
             RebuildDevices(); LoadGame();
@@ -93,17 +105,34 @@ sealed class MainForm : Form
         g.SelectionMode = DataGridViewSelectionMode.CellSelect; g.MultiSelect = false; g.EnableHeadersVisualStyles = false;
         g.ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle { BackColor = Theme.Panel2, ForeColor = Theme.Amber, Font = Theme.UiBold, SelectionBackColor = Theme.Panel2 };
         g.DefaultCellStyle = new DataGridViewCellStyle { BackColor = Theme.Panel, ForeColor = Theme.Text, SelectionBackColor = Color.FromArgb(60, 45, 20), SelectionForeColor = Theme.Text, Font = Theme.Ui };
-        g.RowTemplate.Height = 28; g.ColumnHeadersHeight = 30; g.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-        g.Columns.Add(new DataGridViewTextBoxColumn { Name = "Action", HeaderText = "Action", ReadOnly = true, FillWeight = 26, DefaultCellStyle = { Font = Theme.Mono } });
+        g.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill; // row heights: ApplyGridMetrics
+        g.Columns.Add(new DataGridViewTextBoxColumn { Name = "Action", HeaderText = "Action", ReadOnly = true, FillWeight = 24, DefaultCellStyle = { Font = Theme.Mono } });
         g.Columns.Add(new DataGridViewTextBoxColumn { Name = "Desc", HeaderText = "What it does", ReadOnly = true, FillWeight = 22, DefaultCellStyle = { ForeColor = Theme.Dim } });
         g.Columns.Add(new DataGridViewTextBoxColumn { Name = "Device", HeaderText = "Device", ReadOnly = true, FillWeight = 20 });
         g.Columns.Add(new DataGridViewTextBoxColumn { Name = "Input", HeaderText = "Binding (editable)", FillWeight = 18, DefaultCellStyle = { Font = Theme.Mono } });
-        g.Columns.Add(new DataGridViewButtonColumn { Name = "Detect", HeaderText = "", Text = "Detect", UseColumnTextForButtonValue = false, FillWeight = 9, FlatStyle = FlatStyle.Flat });
-        g.Columns.Add(new DataGridViewButtonColumn { Name = "Inv", HeaderText = "", FillWeight = 5, FlatStyle = FlatStyle.Flat });
-        g.Columns.Add(new DataGridViewButtonColumn { Name = "Clear", HeaderText = "", Text = "×", UseColumnTextForButtonValue = true, FillWeight = 4, FlatStyle = FlatStyle.Flat });
+        g.Columns.Add(new DataGridViewButtonColumn { Name = "Detect", HeaderText = "Detect", ToolTipText = "Click, then press a button, push a hat or move an axis to bind it", UseColumnTextForButtonValue = false, FillWeight = 9, FlatStyle = FlatStyle.Flat });
+        g.Columns.Add(new DataGridViewButtonColumn { Name = "Inv", HeaderText = "Invert", ToolTipText = "Flip an axis's direction (AC7 writes it as :R)", FillWeight = 7, FlatStyle = FlatStyle.Flat });
+        g.Columns.Add(new DataGridViewButtonColumn { Name = "Clear", HeaderText = "Clear", ToolTipText = "Remove the binding", FillWeight = 6, FlatStyle = FlatStyle.Flat });
+        foreach (var name in new[] { "Detect", "Inv", "Clear" })
+        {
+            g.Columns[name].HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleCenter;
+            g.Columns[name].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+        }
         g.CellContentClick += Grid_CellContentClick;
         g.CellEndEdit += Grid_CellEndEdit;
     }
+
+    /// <summary>Grid row heights in device pixels for the current DPI (the grid doesn't scale these itself).</summary>
+    void ApplyGridMetrics()
+    {
+        _grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
+        _grid.ColumnHeadersHeight = Math.Max(LogicalToDeviceUnits(30), TextRenderer.MeasureText("Ag", Theme.UiBold).Height + LogicalToDeviceUnits(10));
+        _grid.RowTemplate.Height = Math.Max(LogicalToDeviceUnits(28), TextRenderer.MeasureText("Ag", Theme.Ui).Height + LogicalToDeviceUnits(10));
+        foreach (var name in new[] { "Detect", "Inv", "Clear" }) // narrow columns: never cut off their heading
+            _grid.Columns[name].MinimumWidth = TextRenderer.MeasureText(_grid.Columns[name].HeaderText, Theme.UiBold).Width + LogicalToDeviceUnits(18);
+    }
+
+    int CardWidth => _devices.ClientSize.Width - _devices.Padding.Horizontal;
 
     void RefreshGrid()
     {
@@ -121,11 +150,22 @@ sealed class MainForm : Form
             }
             _profile.Bindings.TryGetValue(a.Key, out var b);
             string inputText = b == null ? "" : (b.Raw ?? (b.Input != null ? _adapter.Format(b.Input) ?? "(unsupported)" : ""));
+            if (b != null && _adapter.UnsupportedDevice(b.DeviceType, b.DeviceName) != null) inputText = "(device ignored by game) " + inputText;
             bool listening = _listenKey == a.Key;
+            bool inverted = b?.Raw == null && b?.Input is { Kind: InputKind.Axis, Invert: true };
             int r = _grid.Rows.Add(a.Key, a.Description + (a.Kind == ActionKind.Axis ? "  ·axis" : ""), b?.DeviceName ?? "",
-                listening ? "waiting for input…" : inputText, listening ? "Press…" : "Detect", a.Kind == ActionKind.Axis ? "⇅" : "", "×");
-            _grid.Rows[r].Tag = a;
-            if (listening) _grid.Rows[r].DefaultCellStyle.BackColor = Color.FromArgb(60, 42, 12);
+                listening ? "waiting for input…" : inputText, listening ? "Press…" : "Detect", inverted ? "⇅ on" : "⇅", "×");
+            var gr = _grid.Rows[r];
+            gr.Tag = a;
+            if (listening) gr.DefaultCellStyle.BackColor = Color.FromArgb(60, 42, 12);
+            if (a.Kind != ActionKind.Axis) gr.Cells["Inv"] = new DataGridViewTextBoxCell { Value = "" }; // only axes can be inverted
+            else
+            {
+                var inv = gr.Cells["Inv"];
+                inv.ToolTipText = inverted ? "Inverted. Click to restore the normal direction." : "Click to flip this axis's direction.";
+                if (inverted) inv.Style = new DataGridViewCellStyle(inv.InheritedStyle) { ForeColor = Theme.Amber, Font = Theme.UiBold };
+            }
+            if (b == null) gr.Cells["Clear"] = new DataGridViewTextBoxCell { Value = "" }; // nothing to clear
         }
     }
 
@@ -143,6 +183,7 @@ sealed class MainForm : Form
         {
             b.Input = inp with { Invert = !inp.Invert }; b.Raw = null; SaveProfile(); RefreshGrid();
         }
+        else if (col == "Inv" && a.Kind == ActionKind.Axis) SetStatus("Bind an axis first (Detect), then you can invert it.", true);
         else if (col == "Clear") { _profile.Bindings.Remove(a.Key); SaveProfile(); RefreshGrid(); }
     }
 
@@ -208,10 +249,12 @@ sealed class MainForm : Form
 
     bool Bind(LiveDevice d, InputRef input)
     {
+        var devWhy = _adapter.UnsupportedDevice(d.Info.DeviceType, d.Info.ProductName);
+        if (devWhy != null) { SetStatus(devWhy + $" Click {d.Info.DeviceType} ▾ on its card to change what it reports as.", true); return false; }
         var why = _adapter.Unsupported(input);
         if (why != null) { SetStatus(why + " Try another control.", true); return false; }
         var key = _listenKey!; _listenKey = null;
-        _profile.Bindings[key] = new Binding { DeviceProduct = d.Info.ProductGuid, DeviceName = d.Info.ProductName, Input = input };
+        _profile.Bindings[key] = new Binding { DeviceProduct = d.Info.ProductGuid, DeviceName = d.Info.ProductName, DeviceType = d.Info.DeviceType, Input = input };
         SaveProfile(); RefreshGrid();
         SetStatus($"{key} = {_adapter.Format(input)} on {d.Info.ProductName}");
         return true;
@@ -229,8 +272,11 @@ sealed class MainForm : Form
             var known = SafeKnown();
             foreach (var d in _di.Devices)
             {
-                var v = new DeviceView(d) { Width = _devices.ClientSize.Width - 24 };
-                if (!known.ContainsKey(d.Info.ProductGuid)) v.Note = "Not in the game's config yet. A section will be created on install.";
+                bool ignored = _adapter.UnsupportedDevice(d.Info.DeviceType, d.Info.ProductName) != null;
+                var v = new DeviceView(d) { Width = CardWidth, Warn = ignored, Overridden = DeviceTypeOverride.Get(d.Info) != ReportAs.Original };
+                if (ignored) v.Note = $"{GameShortName} ignores {d.Info.DeviceType} devices. Click {d.Info.DeviceType} ▾ to change it.";
+                else if (!known.ContainsKey(d.Info.ProductGuid)) v.Note = "Not in the game's config yet. A section will be created on install.";
+                v.TypeClicked += (_, _) => ShowTypeMenu(v);
                 _devices.Controls.Add(v);
             }
         }
@@ -238,6 +284,56 @@ sealed class MainForm : Form
     }
 
     IReadOnlyDictionary<Guid, string> SafeKnown() { try { return _adapter.KnownDevices(); } catch { return new Dictionary<Guid, string>(); } }
+
+    string GameShortName => _adapter.Name.Split(':')[0];
+
+    // ---------- device type (what the device reports to games) ----------
+    void ShowTypeMenu(DeviceView v)
+    {
+        var d = v.Device.Info;
+        var current = DeviceTypeOverride.Get(d);
+        var m = new ContextMenuStrip { ShowCheckMargin = true, ShowImageMargin = false };
+        m.Items.Add(new ToolStripLabel($"Tell games {d.ProductName} is a:") { ForeColor = Color.DimGray });
+        foreach (var t in DeviceTypeOverride.Choices)
+        {
+            bool read = _adapter.UnsupportedDevice(DeviceTypeOverride.DirectInputType(t), d.ProductName) == null;
+            var item = new ToolStripMenuItem(DeviceTypeOverride.Label(t) + (read ? $"   (read by {GameShortName})" : $"   (ignored by {GameShortName})"))
+            { Checked = current == t };
+            item.Click += (_, _) => ChangeType(d, t, v.Device.State.ButtonCount);
+            m.Items.Add(item);
+        }
+        m.Items.Add(new ToolStripSeparator());
+        var undo = new ToolStripMenuItem($"Original: undo the change (reports as {(current == ReportAs.Original ? d.DeviceType : "its own type")})")
+        { Enabled = current != ReportAs.Original };
+        undo.Click += (_, _) => ChangeType(d, ReportAs.Original, v.Device.State.ButtonCount);
+        m.Items.Add(undo);
+        m.Show(v.TypeButton, new Point(0, v.TypeButton.Height));
+    }
+
+    void ChangeType(DeviceInfo d, ReportAs t, int buttonCount)
+    {
+        try { DeviceTypeOverride.Set(d, t, buttonCount); }
+        catch (Exception ex) { SetStatus("Couldn't change the device type: " + ex.Message, true); return; }
+        _di?.Refresh(); // DirectInput re-reads the setting on every enumeration
+        SyncBindingTypes(); RebuildDevices(); RefreshGrid();
+        var now = _di?.Devices.FirstOrDefault(x => x.Info.ProductGuid == d.ProductGuid)?.Info.DeviceType ?? "?";
+        bool running = _adapter.ProcessName != null && Process.GetProcessesByName(_adapter.ProcessName).Length > 0;
+        SetStatus($"{d.ProductName} now reports as {now}. " +
+                  (running ? $"Restart {GameShortName} so it notices." : "Games pick this up the next time they start."));
+    }
+
+    /// <summary>Keeps each binding's device type in step with what the device reports now (it can be changed).</summary>
+    void SyncBindingTypes()
+    {
+        if (_di == null) return;
+        bool changed = false;
+        foreach (var b in _profile.Bindings.Values)
+        {
+            var t = _di.Devices.FirstOrDefault(x => x.Info.ProductGuid == b.DeviceProduct)?.Info.DeviceType;
+            if (t != null && t != b.DeviceType) { b.DeviceType = t; changed = true; }
+        }
+        if (changed) SaveProfile();
+    }
 
     void Tick()
     {
@@ -251,6 +347,7 @@ sealed class MainForm : Form
     void LoadGame()
     {
         _profile = ProfileStore.Load(_adapter.Id);
+        SyncBindingTypes(); // older profiles have no device type, and a device's type can be changed
         _path.Text = _adapter.ConfigPath + (File.Exists(_adapter.ConfigPath) ? "" : "   (not found: run the game once with your devices connected)");
         RefreshGrid(); RebuildDevices();
         SetStatus($"{_adapter.Name}: {_profile.Bindings.Count} bindings loaded.");
@@ -268,9 +365,11 @@ sealed class MainForm : Form
             item.Click += (_, _) =>
             {
                 foreach (var (k, v) in p.Map)
-                    _profile.Bindings[k] = new Binding { DeviceProduct = p.DeviceProduct, DeviceName = connected?.Info.ProductName ?? p.DeviceName, Input = v };
+                    _profile.Bindings[k] = new Binding { DeviceProduct = p.DeviceProduct, DeviceName = connected?.Info.ProductName ?? p.DeviceName, DeviceType = connected?.Info.DeviceType, Input = v };
                 SaveProfile(); RefreshGrid();
-                SetStatus($"Loaded preset '{p.Name}' ({p.Map.Count} bindings).");
+                var devWhy = connected == null ? null : _adapter.UnsupportedDevice(connected.Info.DeviceType, connected.Info.ProductName);
+                SetStatus($"Loaded preset '{p.Name}' ({p.Map.Count} bindings)." +
+                          (devWhy == null ? "" : $" {devWhy} Click {connected!.Info.DeviceType} ▾ on its card to change it."), devWhy != null);
             };
             m.Items.Add(item);
         }
@@ -304,7 +403,9 @@ sealed class MainForm : Form
         try
         {
             var backup = _adapter.Install(_profile);
-            SetStatus($"Installed {_profile.Bindings.Count} bindings. " + (backup.Length > 0 ? $"Backup: {Path.GetFileName(backup)}" : "(no previous file to back up)"));
+            var ignored = _profile.Bindings.Values.Where(b => _adapter.UnsupportedDevice(b.DeviceType, b.DeviceName) != null).ToList();
+            var skipped = ignored.Count == 0 ? "" : $"Skipped {ignored.Count} on {string.Join(", ", ignored.Select(b => b.DeviceName).Distinct())} (the game ignores it). ";
+            SetStatus($"Installed {_profile.Bindings.Count - ignored.Count} bindings. " + skipped + (backup.Length > 0 ? $"Backup: {Path.GetFileName(backup)}" : "(no previous file to back up)"));
             RebuildDevices();
         }
         catch (Exception ex) { SetStatus("Install failed: " + ex.Message, true); }

@@ -24,7 +24,7 @@ public sealed class LiveDevice : IDisposable
 
     public LiveDevice(IDirectInput8 di, DeviceInstance inst, IntPtr hwnd)
     {
-        Info = new DeviceInfo(inst.InstanceGuid, inst.ProductGuid, inst.ProductName.Trim(), inst.InstanceName.Trim());
+        Info = new DeviceInfo(inst.InstanceGuid, inst.ProductGuid, inst.ProductName.Trim(), inst.InstanceName.Trim(), inst.Type.ToString());
         _dev = di.CreateDevice(inst.InstanceGuid);
         _dev.SetCooperativeLevel(hwnd, CooperativeLevel.NonExclusive | CooperativeLevel.Background);
         _dev.SetDataFormat<RawJoystickState>();
@@ -46,6 +46,9 @@ public sealed class LiveDevice : IDisposable
             else if (t == ObjectGuid.Slider && slider < 2) State.AxisPresent[6 + slider++] = true;
         }
     }
+
+    /// <summary>No axes, buttons or hats: nothing a game could bind.</summary>
+    public bool IsEmpty => State.ButtonCount == 0 && State.PovCount == 0 && !State.AxisPresent.Any(a => a);
 
     static float Norm(int v) => Math.Clamp(v / 32767.5f - 1f, -1f, 1f); // DI default range 0..65535
 
@@ -88,7 +91,14 @@ public sealed class DirectInputService : IDisposable
         Devices.Clear();
         foreach (var inst in _di.GetDevices(DeviceClass.GameControl, DeviceEnumerationFlags.AttachedOnly))
         {
-            try { Devices.Add(new LiveDevice(_di, inst, _hwnd)); } catch { /* skip devices that refuse */ }
+            try
+            {
+                var d = new LiveDevice(_di, inst, _hwnd);
+                // composite devices can expose a vendor-only interface with no controls (the rudder's does once it
+                // reports as Flight); it shares the product GUID, so it would only confuse the list
+                if (d.IsEmpty) d.Dispose(); else Devices.Add(d);
+            }
+            catch { /* skip devices that refuse */ }
         }
     }
 

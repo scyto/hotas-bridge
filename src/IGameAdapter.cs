@@ -18,6 +18,8 @@ public interface IGameAdapter
     string? Format(InputRef input);
     /// <summary>Why an input can't be used, for the status line.</summary>
     string? Unsupported(InputRef input);
+    /// <summary>Why the game ignores a whole device (by DirectInput type), or null if it reads it. Null type = unknown, assume OK.</summary>
+    string? UnsupportedDevice(string? deviceType, string deviceName);
 
     /// <summary>Devices the game's own config already knows about (product GUID → name).</summary>
     IReadOnlyDictionary<Guid, string> KnownDevices();
