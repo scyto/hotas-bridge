@@ -213,7 +213,7 @@ sealed class MainForm : Form, IControlsHost
 
     void RefreshGrid()
     {
-        if (_controlsMode) _controls.Rebuild();
+        if (_controlsMode) { _controls.UpdateView(); return; } // the hidden grid is rebuilt when it's shown again
         _grid.Rows.Clear();
         foreach (var a in GridActions.Where(a => a.Group == _tab))
         {
@@ -287,7 +287,7 @@ sealed class MainForm : Form, IControlsHost
         _controlsMode = controls;
         _grid.Visible = !controls; _controls.Visible = controls;
         StyleTabs();
-        if (controls) _controls.Rebuild();
+        RefreshGrid(); // fills whichever view is showing
     }
 
     void StyleTabs()
