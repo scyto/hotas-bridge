@@ -230,7 +230,9 @@ sealed class MainForm : Form, IControlsHost
             var gr = _grid.Rows[_grid.Rows.Add()];
             gr.Tag = a;
             // a gap between sections (maneuvering, weapons, …): the row before a new section gets a thicker divider
-            if (previous?.Tag is GameAction pa && pa.Section != a.Section) previous.DividerHeight = LogicalToDeviceUnits(8);
+            // (the divider is drawn inside the row, so the row grows by it rather than squashing its text)
+            if (previous?.Tag is GameAction pa && pa.Section != a.Section)
+            { int gap = LogicalToDeviceUnits(8); previous.Height += gap; previous.DividerHeight = gap; }
             previous = gr;
             gr.Cells["Desc"].Value = a.Description + (a.Kind == ActionKind.Axis ? "  ·axis" : "");
             gr.Cells["Device"].Value = b?.DeviceName ?? "";
