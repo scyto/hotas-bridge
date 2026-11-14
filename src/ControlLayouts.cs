@@ -63,10 +63,11 @@ public static class ControlLayouts
             new ControlGroup("Mini-stick", S("Rx", "Forward / back"), S("Ry", "Left / right"), S("B1", "Click")),
             new ControlGroup("Hat", Hat(1)),
             // under the thumb: three positions, middle does nothing (user-confirmed)
-            new ControlGroup("Thumb lever", S("B5", "Up (click)"), S("B6", "Down (stays on)")),
+            new ControlGroup("Thumb lever", S("B5", "Up (stays on)"), S("B6", "Down (stays on)")),
             new ControlGroup("Buttons", S("B2", "B2"), S("B3", "B3"), S("B4", "B4"), S("B11", "B11"), S("B18", "B18")),
-            // 16/17: the flaps control (user-confirmed)
-            new ControlGroup("Flaps", S("B16", "Forward"), S("B17", "Back")),
+            // the flaps lever is Slider2, and the throttle holds 16 at its up end (65535) and 17 at its down end (0), like the
+            // main levers' end buttons (user-confirmed; watcher log)
+            new ControlGroup("Flaps", S("Slider2", "Lever (axis)"), S("B16", "Up"), S("B17", "Down")),
             new ControlGroup("4-way", S("B7", "North"), S("B8", "East"), S("B9", "South"), S("B10", "West")),
             new ControlGroup("Rockers", S("B12", "1 up"), S("B13", "1 down"), S("B14", "2 up"), S("B15", "2 down")),
             // dials, not pads (user-confirmed). The upper dial's outer ring is the Z axis and its inner knob presses 23 and turns
@@ -77,7 +78,6 @@ public static class ControlLayouts
             new ControlGroup("Lower dial", S("B31", "Press"), S("B32", "Left"), S("B33", "Right")),
             // one wheel, two modes (set on the throttle): analog = Slider1, digital = buttons 40/41 (user-confirmed)
             new ControlGroup("Rear wheel", S("Slider1", "Wheel (analog mode)"), S("B40", "Up (digital mode)"), S("B41", "Down (digital mode)")),
-            new ControlGroup("Bottom-right control", S("Slider2", "Axis")),
             // Buttons the levers press by themselves (the guide's "virtual detents"), measured: the centre one pulses ~20 ms
             // as the lever passes the haptic detent (35 left / X, 38 right / Y, per the user); the others are held only while
             // the lever is at the very end of its travel, and 19 fires with 34, 20 with 36 (and 21/37, 22/39) every time. The
