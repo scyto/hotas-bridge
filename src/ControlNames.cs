@@ -27,9 +27,10 @@ public static class ControlNames
         [Presets.FlightdeckThrottle] = new Dictionary<string, string>
         {
             // X/Y and Rx/Ry measured (Rx is the mini-stick's forward/back and Ry its left/right: the reverse of the usual
-            // convention, user-confirmed); Z, Rz and the sliders follow the guide's axis order (C … H), not yet checked
+            // convention); Slider1 is the rear wheel in analog mode (buttons 40/41 in digital mode) and Slider2 the
+            // bottom-right control (user-confirmed). Z and Rz: two of the ALT knob, thumb wheel and flap lever, unconfirmed.
             ["X"] = "Left lever", ["Y"] = "Right lever", ["Rx"] = "Mini-stick forward/back", ["Ry"] = "Mini-stick left/right",
-            ["Z"] = "ALT knob", ["Rz"] = "Thumb wheel", ["Slider1"] = "Flap lever", ["Slider2"] = "Finger wheel",
+            ["Slider1"] = "Rear wheel (analog mode)", ["Slider2"] = "Bottom-right control",
             ["B1"] = "Mini-stick click", ["B5"] = "Switch left", ["B6"] = "Switch right",
             ["B7"] = "4-way north", ["B8"] = "4-way east", ["B9"] = "4-way south", ["B10"] = "4-way west",
             ["B12"] = "Rocker 12/13 up", ["B13"] = "Rocker 12/13 down", ["B14"] = "Rocker 14/15 up", ["B15"] = "Rocker 14/15 down",
@@ -41,7 +42,7 @@ public static class ControlNames
             ["B31"] = "Lower press", ["B32"] = "Lower left", ["B33"] = "Lower right",
             ["B34"] = "Forward detent", ["B35"] = "Middle detent", ["B36"] = "Back detent",
             ["B37"] = "Forward detent", ["B38"] = "Middle detent", ["B39"] = "Back detent",
-            ["B40"] = "Wheel up", ["B41"] = "Wheel down",
+            ["B40"] = "Rear wheel up (digital mode)", ["B41"] = "Rear wheel down (digital mode)",
         },
         [Presets.VelocityOneRudder] = new Dictionary<string, string>
         {

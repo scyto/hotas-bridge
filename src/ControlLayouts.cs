@@ -68,11 +68,13 @@ public static class ControlLayouts
             new ControlGroup("Upper pad", S("B23", "Outer press"), S("B24", "Outer left"), S("B25", "Outer right"), S("B26", "Inner left"), S("B27", "Inner right")),
             new ControlGroup("Middle pad", S("B28", "Press"), S("B29", "Left"), S("B30", "Right")),
             new ControlGroup("Lower pad", S("B31", "Press"), S("B32", "Left"), S("B33", "Right")),
-            new ControlGroup("Wheel", S("B40", "Up"), S("B41", "Down")),
+            // one wheel, two modes (set on the throttle): analog = Slider1, digital = buttons 40/41 (user-confirmed)
+            new ControlGroup("Rear wheel", S("Slider1", "Wheel (analog mode)"), S("B40", "Up (digital mode)"), S("B41", "Down (digital mode)")),
+            new ControlGroup("Bottom-right control", S("Slider2", "Axis")),
             new ControlGroup("Lever detents", S("B19", "Max"), S("B20", "Min"), S("B21", "Max"), S("B22", "Min"),
                 S("B34", "Forward"), S("B35", "Middle"), S("B36", "Back"), S("B37", "Forward"), S("B38", "Middle"), S("B39", "Back")),
-            // Z, Rz and the sliders follow the guide's axis order; not checked yet
-            new ControlGroup("Knobs and wheels (unconfirmed)", S("Z", "ALT knob?"), S("Rz", "Thumb wheel?"), S("Slider1", "Flap lever?"), S("Slider2", "Finger wheel?")),
+            // Z and Rz: two of the guide's ALT knob, thumb wheel and flap lever; not checked yet
+            new ControlGroup("Other axes (unconfirmed)", S("Z", "Z"), S("Rz", "Rz")),
         },
         [Presets.VelocityOneRudder] = new[]
         {
