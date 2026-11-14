@@ -77,7 +77,6 @@ public static class ControlLayouts
             // the flaps lever is Slider2, and the throttle holds 16 at its up end (65535) and 17 at its down end (0), like the
             // main levers' end buttons (user-confirmed; watcher log)
             new ControlGroup("Flaps", S("Slider2", "Lever (axis)"), S("B16", "Up (stays on)"), S("B17", "Down (stays on)")),
-            new ControlGroup("4-way", S("B7", "North"), S("B8", "East"), S("B9", "South"), S("B10", "West")),
             // dials, not pads (user-confirmed). Hangar's Dial Response page: the upper dial's outer ring is either an analog
             // axis (Z, user-confirmed) or digital buttons (24/25 by Hangar's "B23-25" label; - / + order assumed like the
             // others); its inner knob turns as 26 (-) / 27 (+) and presses 23. Middle: 29 / 30, press 28. Lower: 32 / 33, press 31.
@@ -86,9 +85,10 @@ public static class ControlLayouts
             new ControlGroup("Middle dial", S("B28", "Press"), S("B29", "Left"), S("B30", "Right")),
             new ControlGroup("Lower dial", S("B31", "Press"), S("B32", "Left"), S("B33", "Right")),
             // on the back: the wheel (one wheel, two modes set on the throttle: analog = Slider1, digital = buttons 40/41), the
-            // two rockers and button 11 (user-confirmed)
+            // two rockers, the 4-way and button 11 (user-confirmed)
             new ControlGroup("Rear", S("Slider1", "Wheel (analog mode)"), S("B40", "Wheel up (digital mode)"), S("B41", "Wheel down (digital mode)"),
-                S("B12", "Rocker 1 up"), S("B13", "Rocker 1 down"), S("B14", "Rocker 2 up"), S("B15", "Rocker 2 down"), S("B11", "Button 11")),
+                S("B12", "Rocker 1 up"), S("B13", "Rocker 1 down"), S("B14", "Rocker 2 up"), S("B15", "Rocker 2 down"),
+                S("B7", "4-way north"), S("B8", "4-way east"), S("B9", "4-way south"), S("B10", "4-way west"), S("B11", "Button 11")),
             // Rz: not identified yet (the guide's axes still unaccounted for: ALT knob, thumb wheel, flap lever, finger wheel)
             new ControlGroup("Other axes (unconfirmed)", S("Rz", "Rz")),
         },

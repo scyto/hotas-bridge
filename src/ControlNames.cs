@@ -36,7 +36,7 @@ public static class ControlNames
             ["B1"] = "Thumb mini-stick click", ["B2"] = "Thumb button", ["B3"] = "Thumb button", ["B4"] = "Thumb button",
             ["H1U"] = "Thumb (hat 1) up", ["H1R"] = "Thumb (hat 1) right", ["H1D"] = "Thumb (hat 1) down", ["H1L"] = "Thumb (hat 1) left",
             ["B18"] = "Fire suppression", ["B5"] = "Thumb lever up (stays on)", ["B6"] = "Thumb lever down (stays on)",
-            ["B7"] = "4-way north", ["B8"] = "4-way east", ["B9"] = "4-way south", ["B10"] = "4-way west",
+            ["B7"] = "Rear 4-way north", ["B8"] = "Rear 4-way east", ["B9"] = "Rear 4-way south", ["B10"] = "Rear 4-way west",
             ["B11"] = "Rear button",
             ["B12"] = "Rear rocker 12/13 up", ["B13"] = "Rear rocker 12/13 down", ["B14"] = "Rear rocker 14/15 up", ["B15"] = "Rear rocker 14/15 down",
             ["B16"] = "Flaps up (stays on)", ["B17"] = "Flaps down (stays on)", // held at the flaps lever's ends (user-confirmed)
