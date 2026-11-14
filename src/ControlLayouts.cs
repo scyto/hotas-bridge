@@ -59,15 +59,15 @@ public static class ControlLayouts
         },
         [Presets.FlightdeckThrottle] = new[]
         {
-            // Each lever with the buttons it presses by itself (the guide's "virtual detents"; Hangar's per-lever top / middle /
-            // bottom "dead zones", 100 / 50 / 0 % by default). Measured with the levers moved one at a time: left = 19+34 fully
-            // forward, 35 passing the centre, 20+36 fully back; right = 37 fully forward, 38, 22+39. Ends are held while the
-            // lever is there, the centre is a ~20 ms pulse. 21 hasn't been seen: this unit's right lever only just reaches its
-            // top, where 37 flickered.
-            new ControlGroup("Left lever", S("X", "Lever (axis)"), S("B34", "Fully forward"), S("B35", "Passing centre detent"), S("B36", "Fully back"),
-                S("B19", "Fully forward (second button)"), S("B20", "Fully back (second button)")),
-            new ControlGroup("Right lever", S("Y", "Lever (axis)"), S("B37", "Fully forward"), S("B38", "Passing centre detent"), S("B39", "Fully back"),
-                S("B21", "Fully forward (second button)"), S("B22", "Fully back (second button)")),
+            // Each lever with the buttons it presses by itself. 34-39 are Hangar's per-lever dead zones (top / middle / bottom,
+            // 100 / 50 / 0 % by default; the middle one is a zero-width band by default, so passing it is a ~20 ms pulse);
+            // 19-22 are fixed end stops at the ends of the sensor's range. Measured with the levers moved one at a time: left =
+            // 19+34 forward, 35 centre, 20+36 back; right = 37, 38, 22+39. After the user lowered the right lever's top zone and
+            // pushed the profile, 37 fired but 21 still didn't: this unit's right lever never reaches the end of its sensor.
+            new ControlGroup("Left lever", S("X", "Lever (axis)"), S("B34", "Top dead zone"), S("B35", "Middle dead zone (centre detent)"), S("B36", "Bottom dead zone"),
+                S("B19", "Forward end stop"), S("B20", "Back end stop")),
+            new ControlGroup("Right lever", S("Y", "Lever (axis)"), S("B37", "Top dead zone"), S("B38", "Middle dead zone (centre detent)"), S("B39", "Bottom dead zone"),
+                S("B21", "Forward end stop"), S("B22", "Back end stop")),
             // under the thumb: the mini-stick, the thumb wheel around it (Rz), hat 1 and buttons 2-4 (user-confirmed)
             new ControlGroup("Thumb", S("Rx", "Mini-stick forward / back"), S("Ry", "Mini-stick left / right"), S("B1", "Mini-stick click"),
                 S("Rz", "Thumb wheel (axis)"),
