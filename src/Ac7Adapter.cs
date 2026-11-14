@@ -41,16 +41,12 @@ public sealed class Ac7Adapter : IGameAdapter
         new("Flight_Target", "Flight", "Change target", ActionKind.Button),
         new("Flight_Radar", "Flight", "Radar map", ActionKind.Button),
         new("Flight_Flare", "Flight", "Flares", ActionKind.Button),
-        new("Flight_View", "Flight", "Toggle camera", ActionKind.Button),
+        new("Flight_View", "Flight", "Change view", ActionKind.Button),
         new("Flight_AccelerationDeceleration", "Flight", "Hold: high-G turn", ActionKind.Button),
         new("Flight_AutoPilot", "Flight", "Hold: level aircraft", ActionKind.Button),
         new("Flight_Pause", "Flight", "Pause", ActionKind.Button),
-        new("Flight_HatSwitchUp", "Flight", "Hat up", ActionKind.Button),
-        new("Flight_HatSwitchDown", "Flight", "Hat down", ActionKind.Button),
-        new("Flight_HatSwitchLeft", "Flight", "Hat left", ActionKind.Button),
-        new("Flight_HatSwitchRight", "Flight", "Hat right", ActionKind.Button),
-        new("Flight_CameraPitch", "Flight", "Camera pitch", ActionKind.Axis),
-        new("Flight_CameraYaw", "Flight", "Camera yaw", ActionKind.Axis),
+        new("Flight_CameraPitch", "Flight", "Look up / down", ActionKind.Axis),   // free-look camera (a pad's right stick)
+        new("Flight_CameraYaw", "Flight", "Look left / right", ActionKind.Axis),
         new("UI_A", "Menus", "A (confirm)", ActionKind.Button, Nav: MenuNav.Confirm),
         new("UI_B", "Menus", "B (back)", ActionKind.Button, Nav: MenuNav.Back),
         new("UI_X", "Menus", "X", ActionKind.Button),
@@ -74,6 +70,22 @@ public sealed class Ac7Adapter : IGameAdapter
         new("UI_DPadDown", "Menus", "D-pad down", ActionKind.Button, Nav: MenuNav.Down),
         new("UI_DPadLeft", "Menus", "D-pad left", ActionKind.Button, Nav: MenuNav.Left),
         new("UI_DPadRight", "Menus", "D-pad right", ActionKind.Button, Nav: MenuNav.Right),
+        // Multiplayer instant radio messages (confirmed in a match, 2026-11-13): right opens the menu and, with it open, sends the
+        // selected message to all; up/down move the cursor; left cancels at any time. They do nothing in single player.
+        // Named as AC7's keyboard screen names the same functions; AC7 leaves them empty by default.
+        new("Flight_HatSwitchRight", "Multiplayer", "Instant Radio Message Menu (again: send to all)", ActionKind.Button),
+        new("Flight_HatSwitchUp", "Multiplayer", "Move Instant Radio Cursor Up", ActionKind.Button),
+        new("Flight_HatSwitchDown", "Multiplayer", "Move Instant Radio Cursor Down", ActionKind.Button),
+        new("Flight_HatSwitchLeft", "Multiplayer", "Cancel Instant Radio Message", ActionKind.Button),
+    };
+
+    // Functions AC7 only offers on the keyboard (Options > Keyboard), named as AC7 names them, with its default keys. (Its radio
+    // message keys are not here: the Flight_HatSwitch* settings are those functions.)
+    // HOTAS Bridge holds the key while the bound button is held and AC7 is in front. Never written to Input.ini.
+    public IReadOnlyList<GameAction> KeyActions { get; } = new GameAction[]
+    {
+        new("Key_CameraControl", "Keyboard", "Camera Control Key", ActionKind.Button, Keys: new[] { KeyInput.LeftAlt }),
+        new("Key_HighlightTarget", "Keyboard", "Highlight Target", ActionKind.Button, Keys: new[] { KeyInput.F }),
     };
 
     static readonly string[] EnableKeys = { "EnableJoystick", "EnableDeviceJoystick", "EnableDeviceFlight", "EnableDevice1stPerson" };
@@ -146,6 +158,20 @@ public sealed class Ac7Adapter : IGameAdapter
     }
 
     public InputRef? ParseInput(string v) => ParseToken(v.Trim());
+
+    /// <summary>A hat as an axis: "POV_U1 + POV_D1:R" reads +1 with the hat up and -1 with it down (community-documented;
+    /// confirmed in-game for the camera on the Flightdeck Stick's hat 1).</summary>
+    public string? HatAxis(int hat, char positive) =>
+        hat is < 0 or >= 4 || positive is not ('U' or 'D' or 'L' or 'R') ? null
+            : $"POV_{positive}{hat + 1} + POV_{InputRef.OppositeDir(positive)}{hat + 1}:R";
+
+    public (int hat, char positive)? ParseHatAxis(string text)
+    {
+        var m = Regex.Match(text.Trim(), @"^POV_([UDLR])([1-4])\s*\+\s*POV_([UDLR])\2:R$", RegexOptions.IgnoreCase);
+        if (!m.Success) return null;
+        char p = char.ToUpperInvariant(m.Groups[1].Value[0]), n = char.ToUpperInvariant(m.Groups[3].Value[0]);
+        return n == InputRef.OppositeDir(p) ? (int.Parse(m.Groups[2].Value) - 1, p) : null;
+    }
 
     static InputRef? ParseToken(string v)
     {

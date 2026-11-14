@@ -13,6 +13,9 @@ public interface IGameAdapter
     string? ProcessName { get; }
     string ConfigPath { get; }
     IReadOnlyList<GameAction> Actions { get; }
+    /// <summary>Functions the game only offers on the keyboard (no setting in its file). HOTAS Bridge presses their keys
+    /// (GameAction.Keys) while the bound button is held and the game is in front.</summary>
+    IReadOnlyList<GameAction> KeyActions { get; }
     /// <summary>How many buttons the game reads (AC7: 32). Device cards grey out the rest; system buttons can still use them.</summary>
     int MaxButtons { get; }
 
@@ -25,6 +28,11 @@ public interface IGameAdapter
 
     /// <summary>Null if typed binding text is valid in the game's syntax, else why not (shown, and the text isn't saved).</summary>
     string? CheckRaw(string text);
+    /// <summary>A hat used as an axis (e.g. look up/down on a hat) in the game's syntax, with <paramref name="positive"/>
+    /// ('U', 'D', 'L', 'R') the direction that reads as positive; null if the game can't express it.</summary>
+    string? HatAxis(int hat, char positive);
+    /// <summary>The hat and positive direction of text written by <see cref="HatAxis"/>; null if it isn't one.</summary>
+    (int hat, char positive)? ParseHatAxis(string text);
     /// <summary>The input for typed text that names a single control (e.g. "Button8", "Y:R"); null for anything else.</summary>
     InputRef? ParseInput(string text);
     /// <summary>The bindings in a copy of the game's file (e.g. a backup), as profile bindings, so Restore can bring the grid
