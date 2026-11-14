@@ -28,6 +28,32 @@ While the Game Bar is open, your **Menus** bindings drive it like a pad, since i
 
 Bindings are saved per game in `%APPDATA%\HotasBridge\<game>.json`, and app settings in `settings.json` next to them.
 
+## Shaping an axis (sensitivity, curve, dead zone)
+AC7 has no sensitivity, curve or dead-zone settings. HOTAS Bridge can shape an axis itself: it reads your device, reshapes the movement, and sends the result to the game through **vJoy**, a virtual joystick driver. Install [BrunnerInnovation's signed 2.2.x build](https://github.com/BrunnerInnovation/vJoy/releases) once; HOTAS Bridge uses its device 1 and shows it as a card (not for binding).
+
+Click **Shape** on an axis row and tick *Shape this axis*:
+- **Strength** (10–100%): what the game gets at full deflection. Lower is gentler everywhere and also lowers the maximum.
+- **Curve** (0–100): gentler near the centre and steeper towards the ends. Full deflection still reaches Strength.
+- **Dead zone** (0–30%): travel either side of the centre that does nothing.
+
+The graph plots input across and output up; the green dot is where the axis is now. Turning shaping on or off changes which device the game's file names (the Binding cell shows `→ vJoy X`), so click **Back up & overwrite** with the game closed afterwards. After that, slider changes apply straight away, even mid-flight. Keep HOTAS Bridge running while you play: without it vJoy sits at centre and the shaped action does nothing. Up to 8 axes can be shaped at once (vJoy's X … Slider2).
+
+How much the game gets for a given push, at Strength 50%:
+
+| Push | Curve 0 | Curve 60 | Curve 80 | Curve 100 |
+|---|---|---|---|---|
+| 10% | 5% | 2.0% | 1.0% | 0.05% |
+| 20% | 10% | 4.2% | 2.3% | 0.4% |
+| 50% | 25% | 14% | 10% | 6% |
+| 100% | 50% | 50% | 50% | 50% |
+
+- Curve 0 is Strength alone: half the response everywhere.
+- Raising Curve takes response away from the centre and leaves full deflection where it was. Curve 80 is half as sensitive near the centre as Curve 60. At 100 the centre is almost dead and about 70% of the response comes in the last third of the travel, which can feel abrupt.
+- Strength scales every column; at 100%, double the numbers.
+- If only the very centre twitches, a 2–3% dead zone is an alternative to a very high curve.
+
+The formula: output = Strength × ((1 − c)·u + c·u³), where c = Curve / 100 and u is the push (0–1) beyond the dead zone, rescaled to 0–1.
+
 ## Adding a game
 Implement `IGameAdapter` (config path, action list, input syntax, install, backups) and add it to `GameRegistry.All`. Device-specific defaults go in `Presets.BuiltIn`. Inputs are stored neutrally (`InputRef`: axis, button or hat plus direction), so the same physical binding can be written in each game's syntax.
 
@@ -38,4 +64,5 @@ Implement `IGameAdapter` (config path, action list, input syntax, install, backu
 - Devices disagree about which way their axes count, and AC7 expects a particular direction for each action. For the throttle, lower values are faster. Detect asks for a movement and inverts the axis when needed; the Flightdeck Throttle, for example, needs `X:R`.
 - DirectInput has no built-in Menu, View or Guide buttons; a button is just a number. AC7 gives non-Xbox devices its controller buttons through the `UI_*` actions (A/B/X/Y, LB/RB, LT/RT, Menu, stick clicks, D-pad, both sticks), all of which are in the grid. There's no View or Guide action.
 - AC7 doesn't write a section for every joystick it reads. For those, the app creates the section from the DirectInput product GUID (`Joystick-{PIDVID-0000-0000-0000-504944564944}`).
+- AC7 has no dead-zone, sensitivity or curve settings in `Input.ini` or in game. Use **Shape** (above) to soften an axis, e.g. yaw on the VelocityOne Rudder, for which Windows calibration does nothing.
 - Turn off Steam Input for AC7.
