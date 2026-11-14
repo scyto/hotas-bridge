@@ -3,7 +3,8 @@ namespace HotasBridge;
 /// <summary>
 /// What each control is called on known devices, so the grid can say "Trigger, stage 1" next to Button28. From the
 /// VelocityOne Flightdeck Quick Flight Guide (doc 370-6524) plus what was measured; where the guide only says "Button 11",
-/// the name says where it is ("Base button"). Keys: "B28" (button 28), "X" … "Slider2" (axes, as InputRef.AxisNames).
+/// the name says where it is ("Base button"). Keys: "B28" (button 28), "X" … "Slider2" (axes, as InputRef.AxisNames),
+/// "H1U" (hat 1 up; R, D, L).
 /// </summary>
 public static class ControlNames
 {
@@ -30,11 +31,14 @@ public static class ControlNames
             // X/Y and Rx/Ry measured (Rx is the mini-stick's forward/back and Ry its left/right: the reverse of the usual
             // convention); Slider1 is the rear wheel in analog mode (buttons 40/41 in digital mode) and Slider2 the
             // flaps lever, Z the upper dial's outer ring (user-confirmed). Rz unconfirmed.
-            ["X"] = "Left lever", ["Y"] = "Right lever", ["Rx"] = "Mini-stick forward/back", ["Ry"] = "Mini-stick left/right",
+            ["X"] = "Left lever", ["Y"] = "Right lever", ["Rx"] = "Thumb mini-stick forward/back", ["Ry"] = "Thumb mini-stick left/right",
             ["Slider1"] = "Rear wheel (analog mode)", ["Slider2"] = "Flaps lever (axis)", ["Z"] = "Upper dial outer ring (analog mode)",
-            ["B1"] = "Mini-stick click", ["B5"] = "Thumb lever up (stays on)", ["B6"] = "Thumb lever down (stays on)",
+            ["B1"] = "Thumb mini-stick click", ["B2"] = "Thumb button", ["B3"] = "Thumb button", ["B4"] = "Thumb button",
+            ["H1U"] = "Thumb (hat 1) up", ["H1R"] = "Thumb (hat 1) right", ["H1D"] = "Thumb (hat 1) down", ["H1L"] = "Thumb (hat 1) left",
+            ["B18"] = "Fire suppression", ["B5"] = "Thumb lever up (stays on)", ["B6"] = "Thumb lever down (stays on)",
             ["B7"] = "4-way north", ["B8"] = "4-way east", ["B9"] = "4-way south", ["B10"] = "4-way west",
-            ["B12"] = "Rocker 12/13 up", ["B13"] = "Rocker 12/13 down", ["B14"] = "Rocker 14/15 up", ["B15"] = "Rocker 14/15 down",
+            ["B11"] = "Rear button",
+            ["B12"] = "Rear rocker 12/13 up", ["B13"] = "Rear rocker 12/13 down", ["B14"] = "Rear rocker 14/15 up", ["B15"] = "Rear rocker 14/15 down",
             ["B16"] = "Flaps up (stays on)", ["B17"] = "Flaps down (stays on)", // held at the flaps lever's ends (user-confirmed)
             // lever positions: see ControlLayouts (which lever 19/20/34/36 vs 21/22/37/39 belong to is from the guide's numbering)
             ["B19"] = "Left lever fully forward (second button)", ["B20"] = "Left lever fully back (second button)",
@@ -53,18 +57,19 @@ public static class ControlNames
         },
     };
 
-    /// <summary>The control's name on this device, or null if unknown. Hats are named the same on every device ("Hat 1 up").</summary>
+    /// <summary>The control's name on this device, or null if unknown. Hats without a name for the device read "Hat 1 up".</summary>
     public static string? For(Guid product, InputRef input)
     {
-        if (input.Kind == InputKind.Pov)
-            return $"Hat {input.Index + 1} " + input.Direction switch { 'U' => "up", 'D' => "down", 'L' => "left", 'R' => "right", _ => "" };
-        if (!ByDevice.TryGetValue(product, out var names)) return null;
         string? key = input.Kind switch
         {
             InputKind.Button => $"B{input.Index + 1}",
+            InputKind.Pov => $"H{input.Index + 1}{input.Direction}",
             InputKind.Axis when input.Index >= 0 && input.Index < InputRef.AxisNames.Length => InputRef.AxisNames[input.Index],
             _ => null
         };
-        return key != null && names.TryGetValue(key, out var n) ? n : null;
+        if (key != null && ByDevice.TryGetValue(product, out var names) && names.TryGetValue(key, out var n)) return n;
+        return input.Kind == InputKind.Pov
+            ? $"Hat {input.Index + 1} " + input.Direction switch { 'U' => "up", 'D' => "down", 'L' => "left", 'R' => "right", _ => "" }
+            : null;
     }
 }

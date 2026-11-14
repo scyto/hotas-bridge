@@ -59,17 +59,25 @@ public static class ControlLayouts
         },
         [Presets.FlightdeckThrottle] = new[]
         {
-            new ControlGroup("Levers", S("X", "Left lever"), S("Y", "Right lever")),
-            new ControlGroup("Mini-stick", S("Rx", "Forward / back"), S("Ry", "Left / right"), S("B1", "Click")),
-            new ControlGroup("Hat", Hat(1)),
+            // Each lever with the buttons it presses by itself (the guide's "virtual detents"), measured: the centre one pulses
+            // ~20 ms as the lever passes the haptic detent (35 left / X, 38 right / Y, per the user); the others are held only
+            // while the lever is at the very end of its travel, and 19 fires with 34, 20 with 36 (and 21/37, 22/39) every time.
+            // The levers were linked in both tests, so which lever 19/20/34/36 vs 21/22/37/39 belong to follows the guide's numbering.
+            new ControlGroup("Left lever", S("X", "Lever (axis)"), S("B34", "Fully forward"), S("B35", "Passing centre detent"), S("B36", "Fully back"),
+                S("B19", "Fully forward (second button)"), S("B20", "Fully back (second button)")),
+            new ControlGroup("Right lever", S("Y", "Lever (axis)"), S("B37", "Fully forward"), S("B38", "Passing centre detent"), S("B39", "Fully back"),
+                S("B21", "Fully forward (second button)"), S("B22", "Fully back (second button)")),
+            // under the thumb: the mini-stick, hat 1 and buttons 2-4 (user-confirmed)
+            new ControlGroup("Thumb", S("Rx", "Mini-stick forward / back"), S("Ry", "Mini-stick left / right"), S("B1", "Mini-stick click"),
+                S("H1U", "Hat 1 up"), S("H1R", "Hat 1 right"), S("H1D", "Hat 1 down"), S("H1L", "Hat 1 left"),
+                S("B2", "Button 2"), S("B3", "Button 3"), S("B4", "Button 4")),
             // under the thumb: three positions, middle does nothing (user-confirmed)
             new ControlGroup("Thumb lever", S("B5", "Up (stays on)"), S("B6", "Down (stays on)")),
-            new ControlGroup("Buttons", S("B2", "B2"), S("B3", "B3"), S("B4", "B4"), S("B11", "B11"), S("B18", "B18")),
+            new ControlGroup("Fire suppression", S("B18", "Press")),
             // the flaps lever is Slider2, and the throttle holds 16 at its up end (65535) and 17 at its down end (0), like the
             // main levers' end buttons (user-confirmed; watcher log)
             new ControlGroup("Flaps", S("Slider2", "Lever (axis)"), S("B16", "Up (stays on)"), S("B17", "Down (stays on)")),
             new ControlGroup("4-way", S("B7", "North"), S("B8", "East"), S("B9", "South"), S("B10", "West")),
-            new ControlGroup("Rockers", S("B12", "1 up"), S("B13", "1 down"), S("B14", "2 up"), S("B15", "2 down")),
             // dials, not pads (user-confirmed). Hangar's Dial Response page: the upper dial's outer ring is either an analog
             // axis (Z, user-confirmed) or digital buttons (24/25 by Hangar's "B23-25" label; - / + order assumed like the
             // others); its inner knob turns as 26 (-) / 27 (+) and presses 23. Middle: 29 / 30, press 28. Lower: 32 / 33, press 31.
@@ -77,16 +85,10 @@ public static class ControlLayouts
                 S("B23", "Inner press"), S("B26", "Inner left"), S("B27", "Inner right")),
             new ControlGroup("Middle dial", S("B28", "Press"), S("B29", "Left"), S("B30", "Right")),
             new ControlGroup("Lower dial", S("B31", "Press"), S("B32", "Left"), S("B33", "Right")),
-            // one wheel, two modes (set on the throttle): analog = Slider1, digital = buttons 40/41 (user-confirmed)
-            new ControlGroup("Rear wheel", S("Slider1", "Wheel (analog mode)"), S("B40", "Up (digital mode)"), S("B41", "Down (digital mode)")),
-            // Buttons the levers press by themselves (the guide's "virtual detents"), measured: the centre one pulses ~20 ms
-            // as the lever passes the haptic detent (35 left / X, 38 right / Y, per the user); the others are held only while
-            // the lever is at the very end of its travel, and 19 fires with 34, 20 with 36 (and 21/37, 22/39) every time. The
-            // levers were linked in both tests, so which lever 19/20/34/36 vs 21/22/37/39 belong to follows the guide's numbering.
-            new ControlGroup("Left lever positions", S("B34", "Fully forward"), S("B35", "Passing centre detent"), S("B36", "Fully back"),
-                S("B19", "Fully forward (second button)"), S("B20", "Fully back (second button)")),
-            new ControlGroup("Right lever positions", S("B37", "Fully forward"), S("B38", "Passing centre detent"), S("B39", "Fully back"),
-                S("B21", "Fully forward (second button)"), S("B22", "Fully back (second button)")),
+            // on the back: the wheel (one wheel, two modes set on the throttle: analog = Slider1, digital = buttons 40/41), the
+            // two rockers and button 11 (user-confirmed)
+            new ControlGroup("Rear", S("Slider1", "Wheel (analog mode)"), S("B40", "Wheel up (digital mode)"), S("B41", "Wheel down (digital mode)"),
+                S("B12", "Rocker 1 up"), S("B13", "Rocker 1 down"), S("B14", "Rocker 2 up"), S("B15", "Rocker 2 down"), S("B11", "Button 11")),
             // Rz: not identified yet (the guide's axes still unaccounted for: ALT knob, thumb wheel, flap lever, finger wheel)
             new ControlGroup("Other axes (unconfirmed)", S("Rz", "Rz")),
         },
