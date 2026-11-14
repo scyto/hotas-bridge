@@ -107,7 +107,7 @@ sealed class ControlsView : Panel
         else RefreshValues();
     }
 
-    List<LiveDevice> Devices() => _host.Devices.Where(d => !d.Info.IsXInput).ToList();
+    List<LiveDevice> Devices() => _host.Devices.Where(d => !d.Info.IsXInput && !d.Info.IsVJoy).ToList(); // vJoy is HOTAS Bridge's own output
 
     void Rebuild(List<LiveDevice> devices)
     {
