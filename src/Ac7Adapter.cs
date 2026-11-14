@@ -70,25 +70,22 @@ public sealed class Ac7Adapter : IGameAdapter
         new("UI_DPadDown", "Menus", "D-pad down", ActionKind.Button, Nav: MenuNav.Down),
         new("UI_DPadLeft", "Menus", "D-pad left", ActionKind.Button, Nav: MenuNav.Left),
         new("UI_DPadRight", "Menus", "D-pad right", ActionKind.Button, Nav: MenuNav.Right),
-        // Multiplayer: a community guide leaves these blank so the hat "does not send network messages", and AC7's flight-stick
-        // screen labels the T.Flight hat "Instant Messages (Multiplayer only)". They do nothing in single-player flight (tested).
-        // AC7 leaves them empty by default; which direction does what isn't documented.
-        new("Flight_HatSwitchUp", "Multiplayer", "Instant messages: hat up", ActionKind.Button),
-        new("Flight_HatSwitchDown", "Multiplayer", "Instant messages: hat down", ActionKind.Button),
-        new("Flight_HatSwitchLeft", "Multiplayer", "Instant messages: hat left", ActionKind.Button),
-        new("Flight_HatSwitchRight", "Multiplayer", "Instant messages: hat right", ActionKind.Button),
+        // Multiplayer instant radio messages (confirmed in a match, 2026-11-13): right opens the menu and, with it open, sends the
+        // selected message to all; up/down move the cursor; left cancels at any time. They do nothing in single player.
+        // Named as AC7's keyboard screen names the same functions; AC7 leaves them empty by default.
+        new("Flight_HatSwitchRight", "Multiplayer", "Instant Radio Message Menu (again: send to all)", ActionKind.Button),
+        new("Flight_HatSwitchUp", "Multiplayer", "Move Instant Radio Cursor Up", ActionKind.Button),
+        new("Flight_HatSwitchDown", "Multiplayer", "Move Instant Radio Cursor Down", ActionKind.Button),
+        new("Flight_HatSwitchLeft", "Multiplayer", "Cancel Instant Radio Message", ActionKind.Button),
     };
 
-    // Functions AC7 only offers on the keyboard (Options > Keyboard), named as AC7 names them, with its default keys.
+    // Functions AC7 only offers on the keyboard (Options > Keyboard), named as AC7 names them, with its default keys. (Its radio
+    // message keys are not here: the Flight_HatSwitch* settings are those functions.)
     // HOTAS Bridge holds the key while the bound button is held and AC7 is in front. Never written to Input.ini.
     public IReadOnlyList<GameAction> KeyActions { get; } = new GameAction[]
     {
         new("Key_CameraControl", "Keyboard", "Camera Control Key", ActionKind.Button, Keys: new[] { KeyInput.LeftAlt }),
         new("Key_HighlightTarget", "Keyboard", "Highlight Target", ActionKind.Button, Keys: new[] { KeyInput.F }),
-        new("Key_RadioMenu", "Keyboard", "Instant Radio Message Menu (multiplayer)", ActionKind.Button, Keys: new[] { KeyInput.T }),
-        new("Key_RadioUp", "Keyboard", "Move Instant Radio Cursor Up", ActionKind.Button, Keys: new[] { KeyInput.Up }),
-        new("Key_RadioDown", "Keyboard", "Move Instant Radio Cursor Down", ActionKind.Button, Keys: new[] { KeyInput.Down }),
-        new("Key_RadioCancel", "Keyboard", "Cancel Instant Radio Message", ActionKind.Button, Keys: new[] { KeyInput.Left }),
     };
 
     static readonly string[] EnableKeys = { "EnableJoystick", "EnableDeviceJoystick", "EnableDeviceFlight", "EnableDevice1stPerson" };
