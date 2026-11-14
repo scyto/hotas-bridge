@@ -31,7 +31,7 @@ public static class ControlNames
             // convention); Slider1 is the rear wheel in analog mode (buttons 40/41 in digital mode) and Slider2 the
             // flaps lever, Z the upper dial's outer ring (user-confirmed). Rz unconfirmed.
             ["X"] = "Left lever", ["Y"] = "Right lever", ["Rx"] = "Mini-stick forward/back", ["Ry"] = "Mini-stick left/right",
-            ["Slider1"] = "Rear wheel (analog mode)", ["Slider2"] = "Flaps lever (axis)", ["Z"] = "Upper dial outer ring",
+            ["Slider1"] = "Rear wheel (analog mode)", ["Slider2"] = "Flaps lever (axis)", ["Z"] = "Upper dial outer ring (analog mode)",
             ["B1"] = "Mini-stick click", ["B5"] = "Thumb lever up (stays on)", ["B6"] = "Thumb lever down (stays on)",
             ["B7"] = "4-way north", ["B8"] = "4-way east", ["B9"] = "4-way south", ["B10"] = "4-way west",
             ["B12"] = "Rocker 12/13 up", ["B13"] = "Rocker 12/13 down", ["B14"] = "Rocker 14/15 up", ["B15"] = "Rocker 14/15 down",
@@ -39,7 +39,7 @@ public static class ControlNames
             // lever positions: see ControlLayouts (which lever 19/20/34/36 vs 21/22/37/39 belong to is from the guide's numbering)
             ["B19"] = "Left lever fully forward (second button)", ["B20"] = "Left lever fully back (second button)",
             ["B21"] = "Right lever fully forward (second button)", ["B22"] = "Right lever fully back (second button)",
-            ["B23"] = "Upper dial inner press", ["B24"] = "Upper dial outer left (not seen)", ["B25"] = "Upper dial outer right (not seen)",
+            ["B23"] = "Upper dial inner press", ["B24"] = "Upper dial outer ring left (digital mode)", ["B25"] = "Upper dial outer ring right (digital mode)",
             ["B26"] = "Upper dial inner left", ["B27"] = "Upper dial inner right",
             ["B28"] = "Middle dial press", ["B29"] = "Middle dial left", ["B30"] = "Middle dial right",
             ["B31"] = "Lower dial press", ["B32"] = "Lower dial left", ["B33"] = "Lower dial right",

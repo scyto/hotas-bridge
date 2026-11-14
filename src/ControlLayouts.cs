@@ -70,10 +70,11 @@ public static class ControlLayouts
             new ControlGroup("Flaps", S("Slider2", "Lever (axis)"), S("B16", "Up"), S("B17", "Down")),
             new ControlGroup("4-way", S("B7", "North"), S("B8", "East"), S("B9", "South"), S("B10", "West")),
             new ControlGroup("Rockers", S("B12", "1 up"), S("B13", "1 down"), S("B14", "2 up"), S("B15", "2 down")),
-            // dials, not pads (user-confirmed). The upper dial's outer ring is the Z axis and its inner knob presses 23 and turns
-            // as 26/27 (user-confirmed); the guide's outer left/right are that same ring, so 24/25 have never been seen.
-            new ControlGroup("Upper dial", S("Z", "Outer ring (axis)"), S("B23", "Inner press"), S("B26", "Inner left"), S("B27", "Inner right"),
-                S("B24", "Outer left (not seen)"), S("B25", "Outer right (not seen)")),
+            // dials, not pads (user-confirmed). Hangar's Dial Response page: the upper dial's outer ring is either an analog
+            // axis (Z, user-confirmed) or digital buttons (24/25 by Hangar's "B23-25" label; - / + order assumed like the
+            // others); its inner knob turns as 26 (-) / 27 (+) and presses 23. Middle: 29 / 30, press 28. Lower: 32 / 33, press 31.
+            new ControlGroup("Upper dial", S("Z", "Outer ring (analog mode)"), S("B24", "Outer ring left (digital mode)"), S("B25", "Outer ring right (digital mode)"),
+                S("B23", "Inner press"), S("B26", "Inner left"), S("B27", "Inner right")),
             new ControlGroup("Middle dial", S("B28", "Press"), S("B29", "Left"), S("B30", "Right")),
             new ControlGroup("Lower dial", S("B31", "Press"), S("B32", "Left"), S("B33", "Right")),
             // one wheel, two modes (set on the throttle): analog = Slider1, digital = buttons 40/41 (user-confirmed)
