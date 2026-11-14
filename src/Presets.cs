@@ -16,6 +16,10 @@ public static class Presets
     /// fire), the throttle reports 47 but has 1–41.</summary>
     public static readonly IReadOnlyDictionary<Guid, int> PhysicalButtons = new Dictionary<Guid, int> { [FlightdeckStick] = 33, [FlightdeckThrottle] = 41 };
 
+    /// <summary>Hats that physically exist, for devices that report more: the Flightdeck Stick reports 3 but has 2 (the
+    /// third never moves; user-confirmed).</summary>
+    public static readonly IReadOnlyDictionary<Guid, int> PhysicalHats = new Dictionary<Guid, int> { [FlightdeckStick] = 2 };
+
     static InputRef B(int n) => new(InputKind.Button, n - 1);
     static InputRef A(int i, bool inv = false) => new(InputKind.Axis, i, '\0', inv);
     static InputRef H(int hat, char d) => new(InputKind.Pov, hat - 1, d);

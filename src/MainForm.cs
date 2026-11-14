@@ -2,7 +2,7 @@ using System.Diagnostics;
 
 namespace HotasBridge;
 
-sealed class MainForm : Form
+sealed class MainForm : Form, IControlsHost
 {
     readonly ComboBox _game = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 260 };
     readonly Label _path = new() { AutoSize = true, ForeColor = Theme.Dim, Font = Theme.Mono, Margin = new Padding(0, 3, 0, 0) };
@@ -13,6 +13,8 @@ sealed class MainForm : Form
     readonly DataGridView _grid = new();
     readonly FlowLayoutPanel _tabs = new() { Dock = DockStyle.Top, AutoSize = true, WrapContents = true, BackColor = Theme.Panel, Padding = new Padding(0, 0, 0, 8) };
     string _tab = ""; // the action group shown in the grid
+    readonly ControlsView _controls;  // device-centric view of the same bindings (Grid | Controls)
+    bool _controlsMode;
     readonly ToolStripStatusLabel _status = new() { Spring = true, TextAlign = ContentAlignment.MiddleLeft };
     readonly System.Windows.Forms.Timer _timer = new() { Interval = 15 };
     readonly AppSettings _settings;
@@ -70,7 +72,8 @@ sealed class MainForm : Form
         // SplitterDistance is set in Load: here the container still has its default ~150px width and WinForms clamps it
         _split.Panel1.Controls.Add(_devices);
         var right = new Panel { Dock = DockStyle.Fill, Padding = new Padding(12), BackColor = Theme.Panel };
-        right.Controls.Add(_grid); right.Controls.Add(_tabs); // the tab strip docks above the grid
+        _controls = new ControlsView(this) { Dock = DockStyle.Fill, Visible = false };
+        right.Controls.Add(_grid); right.Controls.Add(_controls); right.Controls.Add(_tabs); // the tab strip docks above both
         _split.Panel2.Controls.Add(right);
 
         _strip.Items.Add(_status);
@@ -210,6 +213,7 @@ sealed class MainForm : Form
 
     void RefreshGrid()
     {
+        if (_controlsMode) _controls.Rebuild();
         _grid.Rows.Clear();
         foreach (var a in GridActions.Where(a => a.Group == _tab))
         {
@@ -266,15 +270,32 @@ sealed class MainForm : Form
             t.Click += (_, _) => { _tab = group; StyleTabs(); RefreshGrid(); };
             _tabs.Controls.Add(t);
         }
+        foreach (var (tag, text) in new[] { ("view:grid", "Grid"), ("view:controls", "Controls") })
+        {
+            var v = MakeButton(text, false);
+            v.Margin = new Padding(tag == "view:grid" ? LogicalToDeviceUnits(28) : 0, 0, 6, 0); v.Tag = tag;
+            v.Click += (_, _) => SetViewMode(tag == "view:controls");
+            _tabs.Controls.Add(v);
+        }
         StyleTabs();
         _tabs.ResumeLayout();
+    }
+
+    /// <summary>Grid (action by action) or Controls (the device's controls, each with a dropdown); same bindings.</summary>
+    void SetViewMode(bool controls)
+    {
+        _controlsMode = controls;
+        _grid.Visible = !controls; _controls.Visible = controls;
+        StyleTabs();
+        if (controls) _controls.Rebuild();
     }
 
     void StyleTabs()
     {
         foreach (var t in _tabs.Controls.OfType<Button>())
         {
-            bool on = (string)t.Tag! == _tab;
+            var tag = (string)t.Tag!;
+            bool on = tag.StartsWith("view:") ? (tag == "view:controls") == _controlsMode : tag == _tab;
             t.BackColor = on ? Theme.Panel2 : Theme.Panel;
             t.ForeColor = on ? Theme.Amber : Theme.Dim;
             t.FlatAppearance.BorderColor = on ? Theme.Amber : Theme.Line;
@@ -294,6 +315,64 @@ sealed class MainForm : Form
     Binding? SystemBindingFor(GameAction a) => _settings.System.TryGetValue(a.Key, out var g)
         ? new Binding { DeviceProduct = g.DeviceProduct, DeviceName = g.DeviceName, Input = new InputRef(InputKind.Button, g.Button) }
         : null;
+
+    // ---------- controls view (IControlsHost): same bindings, edited control by control ----------
+    IReadOnlyList<LiveDevice> IControlsHost.Devices => _di?.Devices ?? (IReadOnlyList<LiveDevice>)Array.Empty<LiveDevice>();
+    IEnumerable<GameAction> IControlsHost.TabActions => GridActions.Where(a => a.Group == _tab);
+    Binding? IControlsHost.BindingFor(GameAction a) => a.Group == SystemButtons.Group ? SystemBindingFor(a) : _profile.Bindings.GetValueOrDefault(a.Key);
+    string? IControlsHost.Syntax(InputRef input) => _adapter.Format(input);
+    int IControlsHost.ButtonCount(LiveDevice d) => Math.Min(d.State.ButtonCount, Presets.PhysicalButtons.TryGetValue(d.Info.ProductGuid, out var n) ? n : 128);
+    int IControlsHost.HatCount(LiveDevice d) => Math.Min(d.State.PovCount, Presets.PhysicalHats.TryGetValue(d.Info.ProductGuid, out var n) ? n : 4);
+    string? IControlsHost.CanAssign(GameAction a, LiveDevice d, InputRef input) =>
+        AppHandled(a) ? (input.Kind == InputKind.Button ? null : "System buttons and keyboard functions go on buttons.")
+                      : _adapter.UnsupportedDevice(d.Info.DeviceType, d.Info.ProductName) ?? _adapter.Unsupported(input);
+
+    void IControlsHost.Assign(GameAction a, LiveDevice d, InputRef input, string controlLabel, GameAction? replaced)
+    {
+        var old = ((IControlsHost)this).BindingFor(a);
+        if (replaced != null && replaced != a) RemoveBinding(replaced);
+        if (a.Group == SystemButtons.Group)
+        {
+            _settings.System[a.Key] = new SystemBinding { DeviceProduct = d.Info.ProductGuid, DeviceName = d.Info.ProductName, Button = input.Index };
+            SaveSettings();
+        }
+        else
+        {
+            _profile.Bindings[a.Key] = new Binding { DeviceProduct = d.Info.ProductGuid, DeviceName = d.Info.ProductName, DeviceType = d.Info.DeviceType, Input = input };
+            SaveProfile();
+        }
+        RefreshGrid();
+        SetStatus($"{a.Description} → {controlLabel} on {d.Info.ProductName}" + (old != null ? $" (was {DescribeBinding(old)})" : "") +
+                  (replaced != null && replaced != a ? $". {replaced.Description} is now unbound." : "."));
+    }
+
+    void IControlsHost.Unassign(GameAction a, string controlLabel)
+    {
+        RemoveBinding(a); RefreshGrid();
+        SetStatus($"{a.Description} is no longer on {controlLabel}; it's unbound now.");
+    }
+
+    void IControlsHost.SetInvert(GameAction a, bool invert)
+    {
+        if (!_profile.Bindings.TryGetValue(a.Key, out var b) || b.Input is not { Kind: InputKind.Axis } i) return;
+        b.Input = i with { Invert = invert }; b.Raw = null; SaveProfile(); RefreshGrid();
+    }
+
+    void IControlsHost.Status(string text, bool error) => SetStatus(text, error);
+
+    void RemoveBinding(GameAction a)
+    {
+        if (a.Group == SystemButtons.Group) { _settings.System.Remove(a.Key); SaveSettings(); }
+        else { _profile.Bindings.Remove(a.Key); SaveProfile(); }
+    }
+
+    /// <summary>"Button28 on Flightdeck Stick (Trigger, stage 1)", for status messages.</summary>
+    string DescribeBinding(Binding b)
+    {
+        string what = b.Raw ?? (b.Input != null ? _adapter.Format(b.Input) ?? b.Input.ToString() : "?");
+        string? name = b.Raw == null && b.Input != null ? ControlNames.For(b.DeviceProduct, b.Input) : null;
+        return $"{what} on {b.DeviceName}" + (name != null ? $" ({name})" : "");
+    }
 
     void Grid_CellContentClick(object? sender, DataGridViewCellEventArgs e)
     {
@@ -476,7 +555,8 @@ sealed class MainForm : Form
                 bool ignored = !xinput && _adapter.UnsupportedDevice(d.Info.DeviceType, d.Info.ProductName) != null;
                 var v = new DeviceView(d) { Width = CardWidth, Warn = ignored, Overridden = DeviceTypeOverride.Get(d.Info) != ReportAs.Original,
                                             ButtonLimit = _adapter.MaxButtons, GameName = xinput ? null : GameShortName,
-                                            PhysicalButtons = Presets.PhysicalButtons.TryGetValue(d.Info.ProductGuid, out var real) ? real : null };
+                                            PhysicalButtons = Presets.PhysicalButtons.TryGetValue(d.Info.ProductGuid, out var real) ? real : null,
+                                            PhysicalHats = Presets.PhysicalHats.TryGetValue(d.Info.ProductGuid, out var realHats) ? realHats : null };
                 if (xinput) v.Note = "Xbox controller: games read it directly (XInput). Nothing to set up here.";
                 else if (ignored) v.Note = $"{GameShortName} ignores {d.Info.DeviceType} devices. Click {d.Info.DeviceType} ▾ to change it.";
                 else if (!known.ContainsKey(d.Info.ProductGuid)) v.Note = "Not in the game's config yet. A section will be created on install.";
@@ -584,6 +664,7 @@ sealed class MainForm : Form
         FireKeyActions();
         DriveGameBar();
         _raw?.ClearPressed();
+        if (_controlsMode) _controls.UpdateLive();
         CheckListen();
         foreach (Control c in _devices.Controls) c.Invalidate();
     }
