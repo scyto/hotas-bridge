@@ -57,7 +57,8 @@ public enum ActionKind { Axis, Button }
 /// <param name="Keys">For functions a game only offers on the keyboard: the keys HOTAS Bridge holds down while the bound
 /// button is held (game's default keys). Such actions are never written to the game's file.</param>
 /// <param name="Section">What kind of action it is within its tab (AC7 Flight: Maneuvering, Weapons, Map, Camera, Pause).
-/// The grid lists a tab's actions by section, in IGameAdapter.Sections order, with a gap between sections.</param>
+/// The grid lists a tab's actions by section, in IGameAdapter.Sections order, with a gap between sections; the controls
+/// view's dropdowns use the same order.</param>
 public sealed record GameAction(string Key, string Group, string Description, ActionKind Kind, string? Gesture = null, bool GestureNegative = false,
                                 MenuNav? Nav = null, ushort[]? Keys = null, string? Section = null);
 

@@ -311,7 +311,7 @@ sealed class MainForm : Form, IControlsHost
     IEnumerable<GameAction> GridActions => _adapter.Actions.Concat(_adapter.KeyActions).Concat(SystemButtons.All);
 
     /// <summary>The current tab's actions by section (IGameAdapter.Sections order), then list order; actions without a
-    /// section come last. The grid's row order.</summary>
+    /// section come last. The grid's row order, and the order of the controls view's dropdowns.</summary>
     IEnumerable<GameAction> TabActions()
     {
         var order = _adapter.Sections;
@@ -332,7 +332,7 @@ sealed class MainForm : Form, IControlsHost
 
     // ---------- controls view (IControlsHost): same bindings, edited control by control ----------
     IReadOnlyList<LiveDevice> IControlsHost.Devices => _di?.Devices ?? (IReadOnlyList<LiveDevice>)Array.Empty<LiveDevice>();
-    IEnumerable<GameAction> IControlsHost.TabActions => GridActions.Where(a => a.Group == _tab); // list order (user: no change there)
+    IEnumerable<GameAction> IControlsHost.TabActions => TabActions(); // dropdowns in the grid's order; the physical grouping is unchanged
     Binding? IControlsHost.BindingFor(GameAction a) => a.Group == SystemButtons.Group ? SystemBindingFor(a) : _profile.Bindings.GetValueOrDefault(a.Key);
     string? IControlsHost.Syntax(InputRef input) => _adapter.Format(input);
     int IControlsHost.ButtonCount(LiveDevice d) => Math.Min(d.State.ButtonCount, Presets.PhysicalButtons.TryGetValue(d.Info.ProductGuid, out var n) ? n : 128);
