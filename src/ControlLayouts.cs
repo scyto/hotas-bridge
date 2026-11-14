@@ -59,10 +59,11 @@ public static class ControlLayouts
         },
         [Presets.FlightdeckThrottle] = new[]
         {
-            // Each lever with the buttons it presses by itself (the guide's "virtual detents"), measured: the centre one pulses
-            // ~20 ms as the lever passes the haptic detent (35 left / X, 38 right / Y, per the user); the others are held only
-            // while the lever is at the very end of its travel, and 19 fires with 34, 20 with 36 (and 21/37, 22/39) every time.
-            // The levers were linked in both tests, so which lever 19/20/34/36 vs 21/22/37/39 belong to follows the guide's numbering.
+            // Each lever with the buttons it presses by itself (the guide's "virtual detents"; Hangar's per-lever top / middle /
+            // bottom "dead zones", 100 / 50 / 0 % by default). Measured with the levers moved one at a time: left = 19+34 fully
+            // forward, 35 passing the centre, 20+36 fully back; right = 37 fully forward, 38, 22+39. Ends are held while the
+            // lever is there, the centre is a ~20 ms pulse. 21 hasn't been seen: this unit's right lever only just reaches its
+            // top, where 37 flickered.
             new ControlGroup("Left lever", S("X", "Lever (axis)"), S("B34", "Fully forward"), S("B35", "Passing centre detent"), S("B36", "Fully back"),
                 S("B19", "Fully forward (second button)"), S("B20", "Fully back (second button)")),
             new ControlGroup("Right lever", S("Y", "Lever (axis)"), S("B37", "Fully forward"), S("B38", "Passing centre detent"), S("B39", "Fully back"),

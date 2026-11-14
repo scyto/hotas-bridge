@@ -40,7 +40,7 @@ public static class ControlNames
             ["B11"] = "Rear button",
             ["B12"] = "Rear rocker 12/13 up", ["B13"] = "Rear rocker 12/13 down", ["B14"] = "Rear rocker 14/15 up", ["B15"] = "Rear rocker 14/15 down",
             ["B16"] = "Flaps up (stays on)", ["B17"] = "Flaps down (stays on)", // held at the flaps lever's ends (user-confirmed)
-            // lever positions: see ControlLayouts (which lever 19/20/34/36 vs 21/22/37/39 belong to is from the guide's numbering)
+            // lever positions: see ControlLayouts (measured per lever; 21 not seen yet)
             ["B19"] = "Left lever fully forward (second button)", ["B20"] = "Left lever fully back (second button)",
             ["B21"] = "Right lever fully forward (second button)", ["B22"] = "Right lever fully back (second button)",
             ["B23"] = "Upper dial inner press", ["B24"] = "Upper dial outer ring left (digital mode)", ["B25"] = "Upper dial outer ring right (digital mode)",
