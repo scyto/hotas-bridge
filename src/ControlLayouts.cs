@@ -63,7 +63,9 @@ public static class ControlLayouts
             // 100 / 50 / 0 % by default; the middle one is a zero-width band by default, so passing it is a ~20 ms pulse);
             // 19-22 are fixed end stops at the ends of the sensor's range. Measured with the levers moved one at a time: left =
             // 19+34 forward, 35 centre, 20+36 back; right = 37, 38, 22+39. After the user lowered the right lever's top zone and
-            // pushed the profile, 37 fired but 21 still didn't: this unit's right lever never reaches the end of its sensor.
+            // pushed the profile, 37 fired but 21 still didn't, and moving each zone moved its button but not the end stops
+            // (user-confirmed): this unit's right lever never reaches the end of its sensor. Hangar's picture labels 20 and 22
+            // next to "REV IDL" at the base.
             new ControlGroup("Left lever", S("X", "Lever (axis)"), S("B34", "Top dead zone"), S("B35", "Middle dead zone (centre detent)"), S("B36", "Bottom dead zone"),
                 S("B19", "Forward end stop"), S("B20", "Back end stop")),
             new ControlGroup("Right lever", S("Y", "Lever (axis)"), S("B37", "Top dead zone"), S("B38", "Middle dead zone (centre detent)"), S("B39", "Bottom dead zone"),
