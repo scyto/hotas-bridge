@@ -83,13 +83,14 @@ public static class ControlLayouts
             // the flaps lever is Slider2, and the throttle holds 16 at its up end (65535) and 17 at its down end (0), like the
             // main levers' end buttons (user-confirmed; watcher log)
             new ControlGroup("Flaps", S("Slider2", "Lever (axis)"), S("B16", "Up (stays on)"), S("B17", "Down (stays on)")),
-            // dials, not pads (user-confirmed). Hangar's Dial Response page: the upper dial's outer ring is either an analog
-            // axis (Z, user-confirmed) or digital buttons (24/25 by Hangar's "B23-25" label; - / + order assumed like the
-            // others); its inner knob turns as 26 (-) / 27 (+) and presses 23. Middle: 29 / 30, press 28. Lower: 32 / 33, press 31.
-            new ControlGroup("Upper dial", S("Z", "Outer ring (analog mode)"), S("B24", "Outer ring left (digital mode)"), S("B25", "Outer ring right (digital mode)"),
+            // dials, not pads (user-confirmed), named as Hangar's throttle page names them (autopilot altitude / heading /
+            // speed). Hangar's Dial Response page: the upper dial's outer ring is either an analog axis (Z, user-confirmed) or
+            // digital buttons 24 / 25 (Hangar draws 24 left of 25); its inner knob turns as 26 (-) / 27 (+) and presses 23.
+            // Middle: 29 / 30, press 28. Lower: 32 / 33, press 31.
+            new ControlGroup("Upper dial (autopilot altitude)", S("Z", "Outer ring (analog mode)"), S("B24", "Outer ring left (digital mode)"), S("B25", "Outer ring right (digital mode)"),
                 S("B23", "Inner press"), S("B26", "Inner left"), S("B27", "Inner right")),
-            new ControlGroup("Middle dial", S("B28", "Press"), S("B29", "Left"), S("B30", "Right")),
-            new ControlGroup("Lower dial", S("B31", "Press"), S("B32", "Left"), S("B33", "Right")),
+            new ControlGroup("Middle dial (autopilot heading)", S("B28", "Press"), S("B29", "Left"), S("B30", "Right")),
+            new ControlGroup("Lower dial (autopilot speed)", S("B31", "Press"), S("B32", "Left"), S("B33", "Right")),
             // on the back: the wheel (one wheel, two modes set on the throttle: analog = Slider1, digital = buttons 40/41), the
             // two rockers, the 4-way and button 11 (user-confirmed)
             new ControlGroup("Rear", S("Slider1", "Wheel (analog mode)"), S("B40", "Wheel up (digital mode)"), S("B41", "Wheel down (digital mode)"),
