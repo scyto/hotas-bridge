@@ -26,8 +26,9 @@ public static class ControlNames
         },
         [Presets.FlightdeckThrottle] = new Dictionary<string, string>
         {
-            // X/Y and Rx/Ry measured; Z, Rz and the sliders follow the guide's axis order (C … H), not yet checked
-            ["X"] = "Left lever", ["Y"] = "Right lever", ["Rx"] = "Mini-stick left/right", ["Ry"] = "Mini-stick forward/back",
+            // X/Y and Rx/Ry measured (Rx is the mini-stick's forward/back and Ry its left/right: the reverse of the usual
+            // convention, user-confirmed); Z, Rz and the sliders follow the guide's axis order (C … H), not yet checked
+            ["X"] = "Left lever", ["Y"] = "Right lever", ["Rx"] = "Mini-stick forward/back", ["Ry"] = "Mini-stick left/right",
             ["Z"] = "ALT knob", ["Rz"] = "Thumb wheel", ["Slider1"] = "Flap lever", ["Slider2"] = "Finger wheel",
             ["B1"] = "Mini-stick click", ["B5"] = "Switch left", ["B6"] = "Switch right",
             ["B7"] = "4-way north", ["B8"] = "4-way east", ["B9"] = "4-way south", ["B10"] = "4-way west",
