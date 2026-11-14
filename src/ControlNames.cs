@@ -32,10 +32,10 @@ public static class ControlNames
             // bottom-right control, Z the upper dial's outer ring (user-confirmed). Rz unconfirmed.
             ["X"] = "Left lever", ["Y"] = "Right lever", ["Rx"] = "Mini-stick forward/back", ["Ry"] = "Mini-stick left/right",
             ["Slider1"] = "Rear wheel (analog mode)", ["Slider2"] = "Bottom-right control", ["Z"] = "Upper dial outer ring",
-            ["B1"] = "Mini-stick click",
+            ["B1"] = "Mini-stick click", ["B5"] = "Thumb lever up", ["B6"] = "Thumb lever down (stays on)",
             ["B7"] = "4-way north", ["B8"] = "4-way east", ["B9"] = "4-way south", ["B10"] = "4-way west",
             ["B12"] = "Rocker 12/13 up", ["B13"] = "Rocker 12/13 down", ["B14"] = "Rocker 14/15 up", ["B15"] = "Rocker 14/15 down",
-            ["B16"] = "Flaps forward", ["B17"] = "Flaps back", // user-confirmed; 5/6 unknown
+            ["B16"] = "Flaps forward", ["B17"] = "Flaps back", // user-confirmed
             // lever positions: see ControlLayouts (which lever 19/20/34/36 vs 21/22/37/39 belong to is from the guide's numbering)
             ["B19"] = "Left lever fully forward (second button)", ["B20"] = "Left lever fully back (second button)",
             ["B21"] = "Right lever fully forward (second button)", ["B22"] = "Right lever fully back (second button)",

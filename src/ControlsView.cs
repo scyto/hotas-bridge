@@ -59,7 +59,8 @@ sealed class ControlsView : Panel
     sealed class Row
     {
         public required LiveDevice Dev; public required InputRef Input; public required string SlotLabel, ControlLabel;
-        public required List<GameAction> Compatible; public float Rest;
+        public required List<GameAction> Compatible;
+        public float Anchor; public long LitUntil; // axes: value when it last moved, and until when its name stays lit
         // what it shows (RefreshValues)
         public GameAction? Current; public string? ReadOnlyText; public bool Inverted; public bool Active;
         // where it is, in content coordinates (Arrange)
@@ -143,7 +144,7 @@ sealed class ControlsView : Panel
                 {
                     Dev = dev, Input = slot.Input!, SlotLabel = slot.Label, ControlLabel = $"{g.Title} {slot.Label.ToLowerInvariant()}",
                     Compatible = _actions.Where(a => slot.Input!.Kind == InputKind.Axis ? a.Kind == ActionKind.Axis : a.Kind == ActionKind.Button).ToList(),
-                    Rest = Value(dev, slot.Input!),
+                    Anchor = Value(dev, slot.Input!),
                 }).ToList();
                 _rows.AddRange(rows); _groups.Add((g.Title, rows));
             }
@@ -407,8 +408,18 @@ sealed class ControlsView : Panel
 
     static float Value(LiveDevice d, InputRef i) => i.Kind == InputKind.Axis && i.Index < d.State.Axes.Length ? d.State.Axes[i.Index] : 0f;
 
+    /// <summary>True while the axis is moving: it lights when it gets 1.5% of its range away from where it last lit, so
+    /// slow turns add up but resting jitter doesn't.</summary>
+    static bool AxisMoving(Row row)
+    {
+        float v = Value(row.Dev, row.Input);
+        long now = Environment.TickCount64;
+        if (Math.Abs(v - row.Anchor) > 0.03f) { row.Anchor = v; row.LitUntil = now + DeviceState.LitMs; }
+        return now < row.LitUntil;
+    }
+
     /// <summary>Lights up the names of controls being used: buttons held or just pressed (DeviceState.Lit), hat directions
-    /// pushed, axes moved from where they were when the view was built. Repaints only the names that changed.</summary>
+    /// pushed, and axes while they move (and for DeviceState.LitMs after). Repaints only the names that changed.</summary>
     public void UpdateLive()
     {
         foreach (var row in _rows)
@@ -418,7 +429,7 @@ sealed class ControlsView : Panel
             {
                 InputKind.Button => s.Lit(row.Input.Index),
                 InputKind.Pov => row.Input.Index < s.Pov.Length && DirectInputService.PovDir(s.Pov[row.Input.Index]) == row.Input.Direction,
-                _ => Math.Abs(Value(row.Dev, row.Input) - row.Rest) > 0.25f
+                _ => AxisMoving(row)
             };
             if (row.Active == active) continue;
             row.Active = active;

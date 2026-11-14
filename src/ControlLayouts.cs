@@ -62,14 +62,15 @@ public static class ControlLayouts
             new ControlGroup("Levers", S("X", "Left lever"), S("Y", "Right lever")),
             new ControlGroup("Mini-stick", S("Rx", "Forward / back"), S("Ry", "Left / right"), S("B1", "Click")),
             new ControlGroup("Hat", Hat(1)),
+            // under the thumb: three positions, middle does nothing (user-confirmed)
+            new ControlGroup("Thumb lever", S("B5", "Up (click)"), S("B6", "Down (stays on)")),
             new ControlGroup("Buttons", S("B2", "B2"), S("B3", "B3"), S("B4", "B4"), S("B11", "B11"), S("B18", "B18")),
-            // 16/17: the flaps control (user-confirmed). 5/6 are "left/right" in the guide but which control is unknown, so they
-            // stay under Other controls.
+            // 16/17: the flaps control (user-confirmed)
             new ControlGroup("Flaps", S("B16", "Forward"), S("B17", "Back")),
             new ControlGroup("4-way", S("B7", "North"), S("B8", "East"), S("B9", "South"), S("B10", "West")),
             new ControlGroup("Rockers", S("B12", "1 up"), S("B13", "1 down"), S("B14", "2 up"), S("B15", "2 down")),
-            // dials, not pads (user-confirmed). The upper dial's outer ring is the Z axis and its inner knob presses 23 (both
-            // user-confirmed); the guide's outer left/right (24/25) haven't been seen.
+            // dials, not pads (user-confirmed). The upper dial's outer ring is the Z axis and its inner knob presses 23 and turns
+            // as 26/27 (user-confirmed); the guide's outer left/right are that same ring, so 24/25 have never been seen.
             new ControlGroup("Upper dial", S("Z", "Outer ring (axis)"), S("B23", "Inner press"), S("B26", "Inner left"), S("B27", "Inner right"),
                 S("B24", "Outer left (not seen)"), S("B25", "Outer right (not seen)")),
             new ControlGroup("Middle dial", S("B28", "Press"), S("B29", "Left"), S("B30", "Right")),
