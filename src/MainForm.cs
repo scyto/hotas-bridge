@@ -25,6 +25,7 @@ sealed class MainForm : Form, IControlsHost
     Button _btnInstall = null!;
     DirectInputService? _di;
     RawHidInput? _raw; // buttons and hats while the Game Bar has paused DirectInput
+    readonly VJoyOutput _vjoy = new(); // where shaped axes are sent (Binding.Shape)
     IGameAdapter _adapter = GameRegistry.All[0];
     GameProfile _profile = new();
 
@@ -96,12 +97,13 @@ sealed class MainForm : Form, IControlsHost
             catch (Exception ex) { SetStatus("DirectInput failed to start: " + ex.Message, true); }
             try { _raw = new RawHidInput(); } catch { } // only needed while the Game Bar is open
             RebuildDevices(); LoadGame();
+            VJoyOutput.CentreIfFree(); // a previous run may have died with a shaped axis off-centre
             _timer.Tick += (_, _) => Tick();
             _timer.Start();
             _syncTimer.Tick += (_, _) => UpdateSync();
             _syncTimer.Start();
         };
-        FormClosed += (_, _) => { _timer.Stop(); _syncTimer.Stop(); _di?.Dispose(); _raw?.Dispose(); };
+        FormClosed += (_, _) => { _timer.Stop(); _syncTimer.Stop(); _vjoy.Dispose(); _di?.Dispose(); _raw?.Dispose(); };
     }
 
     static Button MakeButton(string text, bool primary) => new()
@@ -189,8 +191,9 @@ sealed class MainForm : Form, IControlsHost
                                                       ToolTipText = "The setting's name in the game's file (n/a: HOTAS Bridge handles it itself)" });
         g.Columns.Add(new DataGridViewButtonColumn { Name = "Detect", HeaderText = "Detect", ToolTipText = "Click, then press a button, push a hat or move an axis to bind it", UseColumnTextForButtonValue = false, FillWeight = 9, FlatStyle = FlatStyle.Flat });
         g.Columns.Add(new DataGridViewButtonColumn { Name = "Inv", HeaderText = "Invert", ToolTipText = "Flip an axis's direction (AC7 writes it as :R)", FillWeight = 7, FlatStyle = FlatStyle.Flat });
+        g.Columns.Add(new DataGridViewButtonColumn { Name = "Shape", HeaderText = "Shape", ToolTipText = "Strength, curve and dead zone for an axis (sent to the game through vJoy)", FillWeight = 9, FlatStyle = FlatStyle.Flat });
         g.Columns.Add(new DataGridViewButtonColumn { Name = "Clear", HeaderText = "Clear", ToolTipText = "Remove the binding", FillWeight = 6, FlatStyle = FlatStyle.Flat });
-        foreach (var name in new[] { "Detect", "Inv", "Clear" })
+        foreach (var name in new[] { "Detect", "Inv", "Shape", "Clear" })
         {
             g.Columns[name].HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleCenter;
             g.Columns[name].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
@@ -205,7 +208,7 @@ sealed class MainForm : Form, IControlsHost
         _grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
         _grid.ColumnHeadersHeight = Math.Max(LogicalToDeviceUnits(30), TextRenderer.MeasureText("Ag", Theme.UiBold).Height + LogicalToDeviceUnits(10));
         _grid.RowTemplate.Height = Math.Max(LogicalToDeviceUnits(28), TextRenderer.MeasureText("Ag", Theme.Ui).Height + LogicalToDeviceUnits(10));
-        foreach (var name in new[] { "Detect", "Inv", "Clear" }) // narrow columns: never cut off their heading
+        foreach (var name in new[] { "Detect", "Inv", "Shape", "Clear" }) // narrow columns: never cut off their heading
             _grid.Columns[name].MinimumWidth = TextRenderer.MeasureText(_grid.Columns[name].HeaderText, Theme.UiBold).Width + LogicalToDeviceUnits(18);
     }
 
@@ -223,6 +226,7 @@ sealed class MainForm : Form, IControlsHost
             string inputText = b == null ? "" : app ? (b.Input is { Kind: InputKind.Button } ib ? $"Button{ib.Index + 1}" : "")
                 : (b.Raw ?? (b.Input != null ? _adapter.Format(b.Input) ?? "(unsupported)" : ""));
             if (b != null && !app && _adapter.UnsupportedDevice(b.DeviceType, b.DeviceName) != null) inputText = "(device ignored by game) " + inputText;
+            if (b is { IsShaped: true }) inputText += $" → vJoy {InputRef.AxisNames[b.VJoyAxis]}"; // what the game's file will name
             bool listening = _listenKey == a.Key;
             var hatAxis = b?.Raw is { } rawText && !app ? _adapter.ParseHatAxis(rawText) : null;
             bool inverted = b?.Raw == null ? b?.Input is { Kind: InputKind.Axis, Invert: true }
@@ -257,6 +261,16 @@ sealed class MainForm : Form, IControlsHost
                 var inv = gr.Cells["Inv"];
                 inv.ToolTipText = inverted ? "Inverted. Click to restore the normal direction." : "Click to flip this axis's direction.";
                 if (inverted) inv.Style = new DataGridViewCellStyle(inv.InheritedStyle) { ForeColor = Theme.Amber, Font = Theme.UiBold };
+            }
+            if (a.Kind != ActionKind.Axis) gr.Cells["Shape"] = new DataGridViewTextBoxCell { Value = "" }; // only axes can be shaped
+            else
+            {
+                var sc = gr.Cells["Shape"];
+                bool shaped = b is { IsShaped: true };
+                sc.Value = shaped ? b!.Shape!.Summary() : "Shape";
+                sc.ToolTipText = shaped ? $"Shaped, and sent to {GameShortName} as vJoy {InputRef.AxisNames[b!.VJoyAxis]}. Click to change."
+                                        : "Make this axis gentler (strength, curve, dead zone). Sent to the game through vJoy.";
+                if (shaped) sc.Style = new DataGridViewCellStyle(sc.InheritedStyle) { ForeColor = Theme.Amber, Font = Theme.UiBold };
             }
             if (b == null) gr.Cells["Clear"] = new DataGridViewTextBoxCell { Value = "" }; // nothing to clear
         }
@@ -354,7 +368,7 @@ sealed class MainForm : Form, IControlsHost
         }
         else
         {
-            _profile.Bindings[a.Key] = new Binding { DeviceProduct = d.Info.ProductGuid, DeviceName = d.Info.ProductName, DeviceType = d.Info.DeviceType, Input = input };
+            PutBinding(a.Key, new Binding { DeviceProduct = d.Info.ProductGuid, DeviceName = d.Info.ProductName, DeviceType = d.Info.DeviceType, Input = input });
             SaveProfile();
         }
         RefreshGrid();
@@ -410,6 +424,7 @@ sealed class MainForm : Form, IControlsHost
             hb.Raw = flipped; SaveProfile(); RefreshGrid();
         }
         else if (col == "Inv" && a.Kind == ActionKind.Axis) SetStatus("Bind an axis or a hat first (Detect), then you can invert it.", true);
+        else if (col == "Shape" && a.Kind == ActionKind.Axis) ShowShapeDialog(a);
         else if (col == "Clear" && a.Group == SystemButtons.Group) { _settings.System.Remove(a.Key); SaveSettings(); RefreshGrid(); }
         else if (col == "Clear") { _profile.Bindings.Remove(a.Key); SaveProfile(); RefreshGrid(); }
     }
@@ -463,6 +478,7 @@ sealed class MainForm : Form, IControlsHost
         var action = ActionFor(_listenKey);
         foreach (var d in _di.Devices)
         {
+            if (d.Info.IsVJoy) continue; // HOTAS Bridge's own output: binding it would feed it back to itself
             var s = d.State;
             // until the device has reported, its held switches read up and would look like presses (DeviceState.Ready)
             if (!s.Ready || !_baseline.TryGetValue(d.Info.InstanceGuid, out var b)) { _baseline[d.Info.InstanceGuid] = Snap(s); continue; }
@@ -509,7 +525,7 @@ sealed class MainForm : Form, IControlsHost
         var raw = _adapter.HatAxis(hat, DefaultHatPositive(action, vertical));
         if (raw == null) { var why = $"{GameShortName} can't use hat {hat + 1} as an axis."; SetStatus(why + " Try another control.", true); ShowListenNote(why); return false; }
         _listenKey = null;
-        _profile.Bindings[action.Key] = new Binding { DeviceProduct = d.Info.ProductGuid, DeviceName = d.Info.ProductName, DeviceType = d.Info.DeviceType, Raw = raw };
+        PutBinding(action.Key, new Binding { DeviceProduct = d.Info.ProductGuid, DeviceName = d.Info.ProductName, DeviceType = d.Info.DeviceType, Raw = raw });
         SaveProfile(); RefreshGrid();
         SetStatus($"{action.Description} = hat {hat + 1} {(vertical ? "up/down" : "left/right")} on {d.Info.ProductName} ({raw}). If it's the wrong way round, click ⇅.");
         return true;
@@ -545,7 +561,7 @@ sealed class MainForm : Form, IControlsHost
             return false;
         }
         var key = _listenKey!; _listenKey = null;
-        _profile.Bindings[key] = new Binding { DeviceProduct = d.Info.ProductGuid, DeviceName = d.Info.ProductName, DeviceType = d.Info.DeviceType, Input = input };
+        PutBinding(key, new Binding { DeviceProduct = d.Info.ProductGuid, DeviceName = d.Info.ProductName, DeviceType = d.Info.DeviceType, Input = input });
         SaveProfile(); RefreshGrid();
         var gesture = ActionFor(key).Gesture;
         SetStatus($"{key} = {_adapter.Format(input)} on {d.Info.ProductName}" +
@@ -575,6 +591,7 @@ sealed class MainForm : Form, IControlsHost
                                             PhysicalButtons = Presets.PhysicalButtons.TryGetValue(d.Info.ProductGuid, out var real) ? real : null,
                                             PhysicalHats = Presets.PhysicalHats.TryGetValue(d.Info.ProductGuid, out var realHats) ? realHats : null };
                 if (xinput) v.Note = "Xbox controller: games read it directly (XInput). Nothing to set up here.";
+                else if (d.Info.IsVJoy) v.Note = "HOTAS Bridge's virtual joystick: shaped axes are sent here. Not for binding.";
                 else if (ignored) v.Note = $"{GameShortName} ignores {d.Info.DeviceType} devices. Click {d.Info.DeviceType} ▾ to change it.";
                 else if (!known.ContainsKey(d.Info.ProductGuid)) v.Note = "Not in the game's config yet. A section will be created on install.";
                 v.TypeClicked += (_, _) => ShowTypeMenu(v);
@@ -638,7 +655,7 @@ sealed class MainForm : Form, IControlsHost
     {
         string text; Color color; string tip;
         IReadOnlyList<string> diffs;
-        try { diffs = _profile.Bindings.Count == 0 ? Array.Empty<string>() : _adapter.Differences(_profile); }
+        try { diffs = _profile.Bindings.Count == 0 ? Array.Empty<string>() : _adapter.Differences(ForFile()); }
         catch { return; } // e.g. the game is writing the file right now; try again next time
         if (_profile.Bindings.Count == 0) { text = ""; color = Theme.Dim; tip = ""; }
         else if (diffs.Count == 0)
@@ -676,6 +693,7 @@ sealed class MainForm : Form, IControlsHost
     {
         if (_di == null) return;
         _di.PollAll();
+        FeedVJoy();
         UpdateGameBarState();
         FireSystemButtons(); // before CheckListen, so the press that Detect binds to Guide doesn't also fire it
         FireKeyActions();
@@ -703,6 +721,90 @@ sealed class MainForm : Form, IControlsHost
     }
     long? _shareDownAt; // when Share went down (null = up)
     bool _shareHeld;    // this press already saved a clip
+
+    // ---------- shaped axes (vJoy) ----------
+    string? _vjoyProblemShown;
+
+    /// <summary>Sends every shaped axis (Binding.IsShaped) to its vJoy axis: the source axis, shaped (Invert is left to the
+    /// game's file). vJoy axes nothing uses, and those whose source device is unplugged, are centred; with nothing to shape,
+    /// vJoy is centred and released.</summary>
+    void FeedVJoy()
+    {
+        var shaped = _profile.Bindings.Values.Where(b => b.IsShaped).ToList();
+        if (shaped.Count == 0) { _vjoy.Release(); _vjoyProblemShown = null; return; }
+        if (!_vjoy.Open())
+        {
+            if (_vjoyProblemShown != _vjoy.Problem) { _vjoyProblemShown = _vjoy.Problem; SetStatus("Shaped axes aren't reaching the game: " + _vjoy.Problem, true); }
+            return;
+        }
+        _vjoyProblemShown = null;
+        var used = new bool[8];
+        foreach (var b in shaped)
+        {
+            var s = _di?.Devices.FirstOrDefault(x => x.Info.ProductGuid == b.DeviceProduct)?.State;
+            int i = b.Input!.Index;
+            double v = s != null && i < s.Axes.Length && s.AxisPresent[i] ? s.Axes[i] : 0; // unplugged: centre
+            _vjoy.Set(b.VJoyAxis, AxisShape.Apply(v, b.Shape!));
+            if (b.VJoyAxis is >= 0 and < 8) used[b.VJoyAxis] = true;
+        }
+        for (int a = 0; a < 8; a++) if (!used[a]) _vjoy.Set(a, 0);
+    }
+
+    /// <summary>The bindings as the game's file should have them: a shaped axis is read from its vJoy axis instead of the
+    /// real device, keeping Invert (the game applies it).</summary>
+    GameProfile ForFile()
+    {
+        var vj = _di?.Devices.FirstOrDefault(d => d.Info.IsVJoy)?.Info;
+        var p = new GameProfile { GameId = _profile.GameId };
+        foreach (var (k, b) in _profile.Bindings)
+            p.Bindings[k] = !b.IsShaped ? b : new Binding
+            {
+                DeviceProduct = VJoyOutput.ProductGuid, DeviceName = vj?.ProductName ?? "vJoy Device", DeviceType = vj?.DeviceType ?? "FirstPerson",
+                Input = new InputRef(InputKind.Axis, b.VJoyAxis, default, b.Input!.Invert)
+            };
+        return p;
+    }
+
+    /// <summary>Stores a binding, keeping the action's shaping when the new one is a plain axis too, so moving Yaw to another
+    /// axis keeps its strength and curve.</summary>
+    void PutBinding(string key, Binding nb)
+    {
+        if (_profile.Bindings.TryGetValue(key, out var old) && old.Shape != null && nb.Raw == null && nb.Input is { Kind: InputKind.Axis })
+        { nb.Shape = old.Shape; nb.VJoyAxis = old.VJoyAxis; }
+        _profile.Bindings[key] = nb;
+    }
+
+    void ShowShapeDialog(GameAction a)
+    {
+        if (!_profile.Bindings.TryGetValue(a.Key, out var b) || b.Raw != null || b.Input is not { Kind: InputKind.Axis } input)
+        {
+            SetStatus(b?.Raw != null ? "Shaping needs a single axis; this one is typed text or a hat. Bind an axis with Detect first."
+                                     : "Bind an axis first (Detect), then you can shape it.", true);
+            return;
+        }
+        string control = ControlNames.For(b.DeviceProduct, input) ?? _adapter.Format(input) ?? InputRef.AxisNames[input.Index];
+        bool wasShaped = b.IsShaped;
+        using (var dlg = new ShapeDialog(a, b, control, GameShortName, () => LiveAxis(b), FreeVJoyAxis)) dlg.ShowDialog(this);
+        SaveProfile(); RefreshGrid();
+        if (b.IsShaped != wasShaped)
+            SetStatus(b.IsShaped ? $"{a.Description} is shaped. Click Back up & overwrite (with {GameShortName} closed) so {GameShortName} reads it from vJoy."
+                                 : $"{a.Description} isn't shaped any more. Click Back up & overwrite so {GameShortName} reads {b.DeviceName} again.");
+    }
+
+    double? LiveAxis(Binding b)
+    {
+        var s = _di?.Devices.FirstOrDefault(x => x.Info.ProductGuid == b.DeviceProduct)?.State;
+        int i = b.Input?.Index ?? -1;
+        return s != null && i >= 0 && i < s.Axes.Length ? s.Axes[i] : null;
+    }
+
+    /// <summary>The first vJoy axis no other shaped binding uses (and vJoy has), or null.</summary>
+    int? FreeVJoyAxis(Binding self)
+    {
+        var used = _profile.Bindings.Values.Where(x => x != self && x.IsShaped).Select(x => x.VJoyAxis).ToHashSet();
+        for (int i = 0; i < 8; i++) if (!used.Contains(i) && VJoyOutput.HasAxis(i)) return i;
+        return null;
+    }
 
     // ---------- Game Bar navigation ----------
     // The Xbox Game Bar takes Xbox controller, mouse or keyboard input, not a joystick. While it's open, the game's menu
@@ -929,8 +1031,9 @@ sealed class MainForm : Form, IControlsHost
             return;
         try
         {
-            var backup = _adapter.Install(_profile);
-            var fileBindings = _profile.Bindings.Where(kv => _adapter.Actions.Any(x => x.Key == kv.Key)).Select(kv => kv.Value).ToList();
+            var file = ForFile();
+            var backup = _adapter.Install(file);
+            var fileBindings = file.Bindings.Where(kv => _adapter.Actions.Any(x => x.Key == kv.Key)).Select(kv => kv.Value).ToList();
             var ignored = fileBindings.Where(b => _adapter.UnsupportedDevice(b.DeviceType, b.DeviceName) != null).ToList();
             var skipped = ignored.Count == 0 ? "" : $"Skipped {ignored.Count} on {string.Join(", ", ignored.Select(b => b.DeviceName).Distinct())} (the game ignores it). ";
             SetStatus($"Installed {fileBindings.Count - ignored.Count} bindings. " + skipped + (backup.Length > 0 ? $"Backup: {Path.GetFileName(backup)}" : "(no previous file to back up)"));
@@ -942,7 +1045,7 @@ sealed class MainForm : Form, IControlsHost
     void ShowPreview()
     {
         string text;
-        try { text = _adapter.Preview(_profile); } catch (Exception ex) { SetStatus("Preview failed: " + ex.Message, true); return; }
+        try { text = _adapter.Preview(ForFile()); } catch (Exception ex) { SetStatus("Preview failed: " + ex.Message, true); return; }
         var wa = Screen.FromControl(this).WorkingArea;
         using var f = new Form { Text = "Preview: " + Path.GetFileName(_adapter.ConfigPath), Size = new Size(Math.Min(L(760), wa.Width), Math.Min(L(820), wa.Height)), BackColor = Theme.Bg, StartPosition = FormStartPosition.CenterParent };
         using var font = new Font("Consolas", 10f * Theme.TextScale);

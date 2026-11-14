@@ -32,6 +32,8 @@ public sealed record DeviceInfo(Guid InstanceGuid, Guid ProductGuid, string Prod
     /// <summary>An Xbox-style controller (Windows names them "...XINPUT compatible input device", "Controller (Xbox ...)").
     /// Games read these through XInput, not DirectInput, so their DirectInput type doesn't matter and there's nothing to set up.</summary>
     public bool IsXInput => ProductName.Contains("XINPUT", StringComparison.OrdinalIgnoreCase) || ProductName.Contains("Xbox", StringComparison.OrdinalIgnoreCase);
+    /// <summary>HOTAS Bridge's own output (vJoy): shown as a card, but never offered for binding.</summary>
+    public bool IsVJoy => ProductGuid == VJoyOutput.ProductGuid;
 }
 
 /// <summary>One bound action: which device (by product GUID) and which input.</summary>
@@ -44,6 +46,15 @@ public sealed class Binding
     public InputRef? Input { get; set; }
     /// <summary>Optional raw override in the game's own syntax (e.g. "Rx:R + Ry:R").</summary>
     public string? Raw { get; set; }
+    /// <summary>Set for a shaped axis: HOTAS Bridge reads Input, applies this (AxisShape.Apply) and sends the result to vJoy's
+    /// axis VJoyAxis, and the game's file binds the action to that vJoy axis instead (MainForm.ForFile). Only for a plain
+    /// axis Input, not Raw.</summary>
+    public AxisShape? Shape { get; set; }
+    /// <summary>The vJoy axis (0..7 = X … Slider2) a shaped binding is sent to.</summary>
+    public int VJoyAxis { get; set; }
+    /// <summary>Whether this binding is shaped and can be (a plain axis).</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsShaped => Shape != null && Raw == null && Input is { Kind: InputKind.Axis };
 }
 
 public enum ActionKind { Axis, Button }
