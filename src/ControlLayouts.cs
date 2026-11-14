@@ -67,8 +67,9 @@ public static class ControlLayouts
                 S("B19", "Fully forward (second button)"), S("B20", "Fully back (second button)")),
             new ControlGroup("Right lever", S("Y", "Lever (axis)"), S("B37", "Fully forward"), S("B38", "Passing centre detent"), S("B39", "Fully back"),
                 S("B21", "Fully forward (second button)"), S("B22", "Fully back (second button)")),
-            // under the thumb: the mini-stick, hat 1 and buttons 2-4 (user-confirmed)
+            // under the thumb: the mini-stick, the wheel around it (Rz), hat 1 and buttons 2-4 (user-confirmed)
             new ControlGroup("Thumb", S("Rx", "Mini-stick forward / back"), S("Ry", "Mini-stick left / right"), S("B1", "Mini-stick click"),
+                S("Rz", "Wheel around the mini-stick (axis)"),
                 S("H1U", "Hat 1 up"), S("H1R", "Hat 1 right"), S("H1D", "Hat 1 down"), S("H1L", "Hat 1 left"),
                 S("B2", "Button 2"), S("B3", "Button 3"), S("B4", "Button 4")),
             // under the thumb: three positions, middle does nothing (user-confirmed)
@@ -89,8 +90,6 @@ public static class ControlLayouts
             new ControlGroup("Rear", S("Slider1", "Wheel (analog mode)"), S("B40", "Wheel up (digital mode)"), S("B41", "Wheel down (digital mode)"),
                 S("B12", "Rocker 1 up"), S("B13", "Rocker 1 down"), S("B14", "Rocker 2 up"), S("B15", "Rocker 2 down"),
                 S("B7", "4-way north"), S("B8", "4-way east"), S("B9", "4-way south"), S("B10", "4-way west"), S("B11", "Button 11")),
-            // Rz: not identified yet (the guide's axes still unaccounted for: ALT knob, thumb wheel, flap lever, finger wheel)
-            new ControlGroup("Other axes (unconfirmed)", S("Rz", "Rz")),
         },
         [Presets.VelocityOneRudder] = new[]
         {

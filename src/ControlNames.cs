@@ -30,8 +30,8 @@ public static class ControlNames
         {
             // X/Y and Rx/Ry measured (Rx is the mini-stick's forward/back and Ry its left/right: the reverse of the usual
             // convention); Slider1 is the rear wheel in analog mode (buttons 40/41 in digital mode) and Slider2 the
-            // flaps lever, Z the upper dial's outer ring (user-confirmed). Rz unconfirmed.
-            ["X"] = "Left lever", ["Y"] = "Right lever", ["Rx"] = "Thumb mini-stick forward/back", ["Ry"] = "Thumb mini-stick left/right",
+            // flaps lever, Z the upper dial's outer ring, Rz the wheel around the mini-stick (user-confirmed).
+            ["X"] = "Left lever", ["Y"] = "Right lever", ["Rx"] = "Thumb mini-stick forward/back", ["Ry"] = "Thumb mini-stick left/right", ["Rz"] = "Thumb wheel around the mini-stick",
             ["Slider1"] = "Rear wheel (analog mode)", ["Slider2"] = "Flaps lever (axis)", ["Z"] = "Upper dial outer ring (analog mode)",
             ["B1"] = "Thumb mini-stick click", ["B2"] = "Thumb button", ["B3"] = "Thumb button", ["B4"] = "Thumb button",
             ["H1U"] = "Thumb (hat 1) up", ["H1R"] = "Thumb (hat 1) right", ["H1D"] = "Thumb (hat 1) down", ["H1L"] = "Thumb (hat 1) left",
