@@ -47,7 +47,8 @@ public static class ControlLayouts
             new ControlGroup("Hat 1", Hat(1)),
             new ControlGroup("Hat 2", Hat(2)),
             new ControlGroup("D-pad", S("B4", "North"), S("B5", "East"), S("B6", "South"), S("B7", "West")),
-            new ControlGroup("Thumb wheel", S("B29", "Up"), S("B30", "Down"), S("B8", "Click")),
+            // one wheel, two modes (set in Hangar, TrimWheelMode): analog = Slider2, digital = buttons 29/30 (user-confirmed)
+            new ControlGroup("Thumb wheel", S("Slider2", "Wheel (analog mode)"), S("B29", "Up (digital mode)"), S("B30", "Down (digital mode)"), S("B8", "Click")),
             new ControlGroup("Shaft button", S("B9", "Press")),
             new ControlGroup("Pinkie lever", S("Rz", "Lever (axis)"), S("B10", "Pulled")),
             new ControlGroup("Gear lever", S("B23", "Forward"), S("B24", "Back")),
@@ -83,14 +84,15 @@ public static class ControlLayouts
     };
 
     /// <summary>The groups to show for a device: its layout (slots it doesn't report are dropped), then everything else it
-    /// reports under "Other controls". Counts are the real ones (Presets.PhysicalButtons / PhysicalHats).</summary>
+    /// reports under "Other controls". Counts are the real ones (Presets.PhysicalButtons / PhysicalHats), and axes in
+    /// Presets.PhantomAxes are left out.</summary>
     public static IReadOnlyList<ControlGroup> For(Guid product, DeviceState s, int buttons, int hats)
     {
         bool Exists(InputRef i) => i.Kind switch
         {
             InputKind.Button => i.Index < buttons,
             InputKind.Pov => i.Index < hats,
-            _ => i.Index < s.AxisPresent.Length && s.AxisPresent[i.Index]
+            _ => Presets.AxisShown(product, s, i.Index)
         };
         var groups = new List<ControlGroup>();
         var used = new HashSet<string>();
@@ -103,7 +105,7 @@ public static class ControlLayouts
             }
         var other = new List<ControlSlot>();
         for (int a = 0; a < InputRef.AxisNames.Length; a++)
-            if (s.AxisPresent[a] && !used.Contains(InputRef.AxisNames[a])) other.Add(S(InputRef.AxisNames[a], InputRef.AxisNames[a]));
+            if (Presets.AxisShown(product, s, a) && !used.Contains(InputRef.AxisNames[a])) other.Add(S(InputRef.AxisNames[a], InputRef.AxisNames[a]));
         for (int h = 1; h <= hats; h++)
             foreach (var x in Hat(h)) if (!used.Contains(x.Key)) other.Add(x with { Label = $"Hat {h} {x.Label.ToLowerInvariant()}" });
         for (int b = 1; b <= buttons; b++)

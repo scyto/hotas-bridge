@@ -12,7 +12,8 @@ public static class ControlNames
         [Presets.FlightdeckStick] = new Dictionary<string, string>
         {
             ["X"] = "Stick left/right", ["Y"] = "Stick forward/back", ["Z"] = "Stick twist",
-            ["Rx"] = "Thumbstick left/right", ["Ry"] = "Thumbstick up/down", ["Rz"] = "Pinkie lever (axis)", ["Slider1"] = "Thumb wheel",
+            ["Rx"] = "Thumbstick left/right", ["Ry"] = "Thumbstick up/down", ["Rz"] = "Pinkie lever (axis)",
+            ["Slider2"] = "Thumb wheel (analog mode)", // digital mode: buttons 29/30 (user-confirmed)
             ["B1"] = "Touch pad push (FIRE)", ["B2"] = "Trigger, full", ["B3"] = "Thumbstick click",
             ["B4"] = "D-pad north", ["B5"] = "D-pad east", ["B6"] = "D-pad south", ["B7"] = "D-pad west",
             ["B8"] = "Thumb wheel click", ["B9"] = "Shaft button", ["B10"] = "Pinkie lever",
@@ -21,7 +22,7 @@ public static class ControlNames
             ["B20"] = "Toggle 20/21 forward", ["B21"] = "Toggle 20/21 back", ["B22"] = "Base button",
             ["B23"] = "Gear lever forward", ["B24"] = "Gear lever back",
             ["B25"] = "Rotary knob left", ["B26"] = "Rotary knob right", ["B27"] = "Rotary knob press",
-            ["B28"] = "Trigger, stage 1", ["B29"] = "Thumb wheel up", ["B30"] = "Thumb wheel down",
+            ["B28"] = "Trigger, stage 1", ["B29"] = "Thumb wheel up (digital mode)", ["B30"] = "Thumb wheel down (digital mode)",
             ["B31"] = "Base button", ["B32"] = "Base button", ["B33"] = "Base button",
         },
         [Presets.FlightdeckThrottle] = new Dictionary<string, string>

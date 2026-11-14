@@ -136,7 +136,7 @@ sealed class DeviceView : Control
     {
         EnsureFonts();
         var s = Device.State;
-        int axes = s.AxisPresent.Count(x => x);
+        int axes = Enumerable.Range(0, s.AxisPresent.Length).Count(i => Presets.AxisShown(Device.Info.ProductGuid, s, i));
         return Pad + HeaderH + axes * AxisRowH + S(8) + (ShownHats > 0 ? S(40) : 0) + ButtonsHeight(width) + Pad;
     }
 
@@ -196,7 +196,7 @@ sealed class DeviceView : Control
         int barX = pad + labelW, barW = Math.Max(S(20), Width - barX - gap - valueW - pad), barH = S(9);
         for (int i = 0; i < 8; i++)
         {
-            if (!s.AxisPresent[i]) continue;
+            if (!Presets.AxisShown(Device.Info.ProductGuid, s, i)) continue;
             int ty = y + (rowH - line) / 2;
             TextRenderer.DrawText(g, InputRef.AxisNames[i], _mono, new Point(pad, ty), Theme.Dim);
             var r = new Rectangle(barX, y + (rowH - barH) / 2, barW, barH);
