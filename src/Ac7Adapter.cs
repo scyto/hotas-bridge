@@ -45,8 +45,8 @@ public sealed class Ac7Adapter : IGameAdapter
         new("Flight_AccelerationDeceleration", "Flight", "Hold: high-G turn", ActionKind.Button),
         new("Flight_AutoPilot", "Flight", "Hold: level aircraft", ActionKind.Button),
         new("Flight_Pause", "Flight", "Pause", ActionKind.Button),
-        new("Flight_HatSwitchUp", "Flight", "Hat up", ActionKind.Button),   // purpose unconfirmed: did nothing in flight while the camera
-        // axes were bound; the user recalls it moving the camera before that. Test: clear CameraPitch/Yaw and try the hat.
+        new("Flight_HatSwitchUp", "Flight", "Hat up", ActionKind.Button),   // does nothing in single-player flight (tested, also with the camera
+        // axes cleared); empty in AC7's default file. Possibly multiplayer radio messages (unconfirmed).
         new("Flight_HatSwitchDown", "Flight", "Hat down", ActionKind.Button),
         new("Flight_HatSwitchLeft", "Flight", "Hat left", ActionKind.Button),
         new("Flight_HatSwitchRight", "Flight", "Hat right", ActionKind.Button),
