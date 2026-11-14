@@ -448,7 +448,8 @@ sealed class MainForm : Form, IControlsHost
         foreach (var d in _di.Devices)
         {
             var s = d.State;
-            if (!_baseline.TryGetValue(d.Info.InstanceGuid, out var b)) { _baseline[d.Info.InstanceGuid] = Snap(s); continue; }
+            // until the device has reported, its held switches read up and would look like presses (DeviceState.Ready)
+            if (!s.Ready || !_baseline.TryGetValue(d.Info.InstanceGuid, out var b)) { _baseline[d.Info.InstanceGuid] = Snap(s); continue; }
             if (action.Kind == ActionKind.Axis)
             {
                 // axes only: a throttle presses detent buttons as its lever moves, which must not win

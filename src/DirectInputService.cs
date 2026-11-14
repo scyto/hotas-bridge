@@ -18,6 +18,12 @@ public sealed class DeviceState
     public long[] LitUntil = new long[128];
     public const int LitMs = 250;
 
+    /// <summary>The device has reported since it was (re)acquired. Until its first report every button reads up, and that
+    /// report shows switches that sit held (the Flightdeck Stick's gear lever, 23, and rotary knob, 25/26) as new presses
+    /// (measured), so that report only sets the starting state: its presses aren't counted, and Detect re-takes its
+    /// baseline until this is true. A real press in that very first report is lost; pressing again works.</summary>
+    public bool Ready;
+
     /// <summary>Held now, or pressed in the last LitMs: what the UI shows.</summary>
     public bool Lit(int button) => button < 128 && (Buttons[button] || Environment.TickCount64 < LitUntil[button]);
 }
@@ -27,7 +33,7 @@ public sealed class LiveDevice : IDisposable
     public DeviceInfo Info { get; }
     public DeviceState State { get; } = new();
     readonly IDirectInputDevice8 _dev;
-    bool _acquired;
+    bool _acquired, _reported;
 
     public LiveDevice(IDirectInput8 di, DeviceInstance inst, IntPtr hwnd)
     {
@@ -63,14 +69,18 @@ public sealed class LiveDevice : IDisposable
     {
         try
         {
-            if (!_acquired) { _dev.Acquire(); _acquired = true; }
+            if (!_acquired) { _dev.Acquire(); _acquired = true; _reported = false; State.Ready = false; }
             _dev.Poll();
             State.Pressed.Clear();
-            foreach (var u in _dev.GetBufferedJoystickData())
+            var data = _dev.GetBufferedJoystickData().ToArray();
+            bool first = !_reported && data.Length > 0; // the first report: starting state, not presses (see DeviceState.Ready)
+            foreach (var u in data)
             {
                 int off = (int)u.Offset, b0 = (int)JoystickOffset.Buttons0;
-                if (off >= b0 && off < b0 + 128 && (u.Value & 0x80) != 0) State.Pressed.Add(off - b0);
+                if (!first && off >= b0 && off < b0 + 128 && (u.Value & 0x80) != 0) State.Pressed.Add(off - b0);
             }
+            if (first) _reported = true;
+            else if (_reported) State.Ready = true; // one poll later, so Detect's baseline includes the first report
             long until = Environment.TickCount64 + DeviceState.LitMs;
             foreach (var b in State.Pressed) State.LitUntil[b] = until;
             var s = _dev.GetCurrentJoystickState();

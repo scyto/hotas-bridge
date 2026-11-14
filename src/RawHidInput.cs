@@ -16,8 +16,10 @@ sealed class RawHidInput : NativeWindow, IDisposable
     {
         public readonly bool[] Buttons = new bool[128];
         public readonly int[] Pov = { -1, -1, -1, -1 };
-        /// <summary>Buttons that went down since <see cref="ClearPressed"/> (every report counts, so short taps do too).</summary>
+        /// <summary>Buttons that went down since <see cref="ClearPressed"/> (every report counts, so short taps do too). Not
+        /// from the device's first report, which only sets the starting state (see DeviceState.Ready).</summary>
         public readonly List<int> Pressed = new();
+        public bool Reported;
     }
 
     /// <summary>Latest state per device, by DirectInput product GUID ({PIDVID-0000-0000-0000-504944564944}).</summary>
@@ -90,9 +92,10 @@ sealed class RawHidInput : NativeWindow, IDisposable
         {
             if (rid != 0 && rid != reportId) continue;
             bool on = down.Contains(button);
-            if (on && !st.Buttons[button]) st.Pressed.Add(button);
+            if (on && !st.Buttons[button] && st.Reported) st.Pressed.Add(button);
             st.Buttons[button] = on;
         }
+        st.Reported = true;
         for (int h = 0; h < dev.Hats.Count && h < st.Pov.Length; h++)
         {
             var (index, min, max, rid) = dev.Hats[h];
