@@ -213,10 +213,11 @@ sealed class MainForm : Form
         _grid.Rows.Clear();
         foreach (var a in GridActions.Where(a => a.Group == _tab))
         {
-            bool sys = a.Group == SystemButtons.Group;
+            bool sys = a.Group == SystemButtons.Group, app = AppHandled(a);
             var b = sys ? SystemBindingFor(a) : _profile.Bindings.GetValueOrDefault(a.Key);
-            string inputText = b == null ? "" : sys ? $"Button{b.Input!.Index + 1}" : (b.Raw ?? (b.Input != null ? _adapter.Format(b.Input) ?? "(unsupported)" : ""));
-            if (b != null && !sys && _adapter.UnsupportedDevice(b.DeviceType, b.DeviceName) != null) inputText = "(device ignored by game) " + inputText;
+            string inputText = b == null ? "" : app ? (b.Input is { Kind: InputKind.Button } ib ? $"Button{ib.Index + 1}" : "")
+                : (b.Raw ?? (b.Input != null ? _adapter.Format(b.Input) ?? "(unsupported)" : ""));
+            if (b != null && !app && _adapter.UnsupportedDevice(b.DeviceType, b.DeviceName) != null) inputText = "(device ignored by game) " + inputText;
             bool listening = _listenKey == a.Key;
             bool inverted = b?.Raw == null && b?.Input is { Kind: InputKind.Axis, Invert: true };
             var gr = _grid.Rows[_grid.Rows.Add()];
@@ -225,11 +226,17 @@ sealed class MainForm : Form
             gr.Cells["Device"].Value = b?.DeviceName ?? "";
             gr.Cells["Control"].Value = b is { Raw: null, Input: { } bound } ? ControlNames.For(b.DeviceProduct, bound) ?? "" : "";
             gr.Cells["Input"].Value = listening ? "waiting for input…" : inputText;
-            gr.Cells["Key"].Value = sys ? "n/a" : a.Key;
+            gr.Cells["Key"].Value = sys ? "n/a" : a.Keys != null ? $"n/a (presses {KeyInput.Describe(a.Keys)})" : a.Key;
             gr.Cells["Detect"].Value = listening ? "Press…" : "Detect";
             gr.Cells["Inv"].Value = inverted ? "⇅ on" : "⇅";
             gr.Cells["Clear"].Value = "×";
-            if (sys) { gr.Cells["Input"].ReadOnly = true; gr.Cells["Desc"].ToolTipText = gr.Cells["Key"].ToolTipText = SystemButtons.Tip(a); }
+            if (app)
+            {
+                gr.Cells["Input"].ReadOnly = true;
+                gr.Cells["Desc"].ToolTipText = gr.Cells["Key"].ToolTipText = sys ? SystemButtons.Tip(a) :
+                    $"{GameShortName} only has this on the keyboard ({KeyInput.Describe(a.Keys!)}, its default key). HOTAS Bridge holds that key " +
+                    $"while you hold the button, when {GameShortName} is the window in front, so keep HOTAS Bridge running.";
+            }
             if (listening) { gr.DefaultCellStyle.BackColor = Color.FromArgb(60, 42, 12); gr.Cells["Input"].ReadOnly = true; }
             if (a.Kind != ActionKind.Axis) gr.Cells["Inv"] = new DataGridViewTextBoxCell { Value = "" }; // only axes can be inverted
             else
@@ -273,7 +280,11 @@ sealed class MainForm : Form
     }
 
     /// <summary>The grid's rows: the game's actions, then the system buttons (which work in every game).</summary>
-    IEnumerable<GameAction> GridActions => _adapter.Actions.Concat(SystemButtons.All);
+    IEnumerable<GameAction> GridActions => _adapter.Actions.Concat(_adapter.KeyActions).Concat(SystemButtons.All);
+
+    /// <summary>Actions HOTAS Bridge carries out itself (system buttons, keyboard-only functions): any button on any device,
+    /// buttons only, never written to the game's file.</summary>
+    static bool AppHandled(GameAction a) => a.Group == SystemButtons.Group || a.Keys != null;
     GameAction ActionFor(string key) => GridActions.First(x => x.Key == key);
 
     /// <summary>A system button's binding (kept in AppSettings), shaped like a game binding for the grid.</summary>
@@ -302,7 +313,7 @@ sealed class MainForm : Form
 
     void Grid_CellEndEdit(object? sender, DataGridViewCellEventArgs e)
     {
-        if (_grid.Rows[e.RowIndex].Tag is not GameAction a || _grid.Columns[e.ColumnIndex].Name != "Input" || a.Group == SystemButtons.Group) return;
+        if (_grid.Rows[e.RowIndex].Tag is not GameAction a || _grid.Columns[e.ColumnIndex].Name != "Input" || AppHandled(a)) return;
         if (_listenKey == a.Key) { BeginInvoke(new Action(RefreshGrid)); return; } // the cell shows Detect's prompt, not a binding
         var text = (_grid.Rows[e.RowIndex].Cells[e.ColumnIndex].Value as string)?.Trim() ?? "";
         if (text.Length == 0) { _profile.Bindings.Remove(a.Key); }
@@ -325,7 +336,7 @@ sealed class MainForm : Form
         _baseline = new();
         if (_di != null) foreach (var d in _di.Devices) _baseline[d.Info.InstanceGuid] = Snap(d.State);
         var a = ActionFor(key);
-        var what = a.Group == SystemButtons.Group ? "press a button" :
+        var what = AppHandled(a) ? "press a button" :
                    a.Kind == ActionKind.Button ? "press a button or push a hat" : a.Gesture ?? "move the axis you want";
         SetStatus($"Listening for {key}: {what}. Click Press… or Esc to cancel.");
     }
@@ -365,7 +376,7 @@ sealed class MainForm : Form
                 if (Bind(d, new InputRef(InputKind.Button, i))) return;
                 b.btn[i] = true; // unsupported: ignore this one and keep listening
             }
-            if (action.Group == SystemButtons.Group) continue; // system buttons are buttons only
+            if (AppHandled(action)) continue; // system buttons and keyboard functions are buttons only
             for (int h = 0; h < s.PovCount; h++)
             {
                 char dir = DirectInputService.PovDir(s.Pov[h]);
@@ -376,6 +387,15 @@ sealed class MainForm : Form
 
     bool Bind(LiveDevice d, InputRef input)
     {
+        if (ActionFor(_listenKey!) is { Keys: { } keys } keyAction) // keyboard-only function: any device and button, stored per game
+        {
+            _listenKey = null;
+            _profile.Bindings[keyAction.Key] = new Binding { DeviceProduct = d.Info.ProductGuid, DeviceName = d.Info.ProductName, DeviceType = d.Info.DeviceType, Input = input };
+            SaveProfile(); RefreshGrid();
+            SetStatus($"{keyAction.Description} = Button{input.Index + 1} on {d.Info.ProductName}. HOTAS Bridge presses {KeyInput.Describe(keys)} " +
+                      $"while you hold it, when {GameShortName} is in front.");
+            return true;
+        }
         if (ActionFor(_listenKey!).Group == SystemButtons.Group) // any device type and button: the game never sees it
         {
             var sysKey = _listenKey!; _listenKey = null;
@@ -527,6 +547,7 @@ sealed class MainForm : Form
         _di.PollAll();
         UpdateGameBarState();
         FireSystemButtons(); // before CheckListen, so the press that Detect binds to Guide doesn't also fire it
+        FireKeyActions();
         DriveGameBar();
         _raw?.ClearPressed();
         CheckListen();
@@ -624,6 +645,48 @@ sealed class MainForm : Form
         };
     }
 
+    // ---------- keyboard-only functions ----------
+    readonly Dictionary<string, bool> _keyHeld = new(); // action key → its keys are held down now
+
+    /// <summary>Holds each keyboard function's keys while its button is held, but only while the game is the window in front
+    /// (so keys never land in other apps) and not while Detect listens or the Game Bar is open. Taps shorter than one poll
+    /// still press the key.</summary>
+    void FireKeyActions()
+    {
+        bool active = _listenKey != null || _di == null || _gameBarOpen || Environment.TickCount64 < _ignoreDirectInputUntil ? false : GameInFront();
+        foreach (var a in _adapter.KeyActions)
+        {
+            bool was = _keyHeld.GetValueOrDefault(a.Key), down = false, tapped = false;
+            if (active && _profile.Bindings.TryGetValue(a.Key, out var b) && b.Input is { Kind: InputKind.Button } i)
+            {
+                var s = _di!.Devices.FirstOrDefault(x => x.Info.ProductGuid == b.DeviceProduct)?.State;
+                if (s != null && i.Index < s.Buttons.Length) { down = s.Buttons[i.Index]; tapped = !down && s.Pressed.Contains(i.Index); }
+            }
+            if (down && !was) KeyInput.Hold(a.Keys!);
+            else if (!down && was) KeyInput.Release(a.Keys!);
+            else if (tapped && !was) KeyInput.Press(a.Keys!);
+            _keyHeld[a.Key] = down;
+        }
+    }
+
+    IntPtr _fgWindow; bool _fgIsGame;
+    /// <summary>Whether the game's window is in front (checked again only when the foreground window changes).</summary>
+    bool GameInFront()
+    {
+        if (_adapter.ProcessName == null) return false;
+        var h = GetForegroundWindow();
+        if (h != _fgWindow)
+        {
+            _fgWindow = h;
+            GetWindowThreadProcessId(h, out uint pid);
+            try { using var proc = Process.GetProcessById((int)pid); _fgIsGame = proc.ProcessName.Equals(_adapter.ProcessName, StringComparison.OrdinalIgnoreCase); }
+            catch { _fgIsGame = false; }
+        }
+        return _fgIsGame;
+    }
+    [System.Runtime.InteropServices.DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+    [System.Runtime.InteropServices.DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);
+
     /// <summary>A bound system button: pressed since the last poll, and held now. Null if unbound or its device is unplugged.</summary>
     (bool pressed, bool down)? SystemState(GameAction a)
     {
@@ -708,6 +771,8 @@ sealed class MainForm : Form
                     var profileBackup = ProfileStore.Backup(_adapter.Id);
                     _adapter.Restore(f);
                     _listenKey = null;
+                    foreach (var ka in _adapter.KeyActions) // not in the game's file: keep them
+                        if (_profile.Bindings.TryGetValue(ka.Key, out var kept)) restored[ka.Key] = kept;
                     _profile.Bindings = restored;
                     foreach (var b in restored.Values.Where(b => b.DeviceName.Length == 0)) // no ProductName line: name it from the device
                         b.DeviceName = _di?.Devices.FirstOrDefault(d => d.Info.ProductGuid == b.DeviceProduct)?.Info.ProductName ?? "Unknown device";
@@ -733,9 +798,10 @@ sealed class MainForm : Form
         try
         {
             var backup = _adapter.Install(_profile);
-            var ignored = _profile.Bindings.Values.Where(b => _adapter.UnsupportedDevice(b.DeviceType, b.DeviceName) != null).ToList();
+            var fileBindings = _profile.Bindings.Where(kv => _adapter.Actions.Any(x => x.Key == kv.Key)).Select(kv => kv.Value).ToList();
+            var ignored = fileBindings.Where(b => _adapter.UnsupportedDevice(b.DeviceType, b.DeviceName) != null).ToList();
             var skipped = ignored.Count == 0 ? "" : $"Skipped {ignored.Count} on {string.Join(", ", ignored.Select(b => b.DeviceName).Distinct())} (the game ignores it). ";
-            SetStatus($"Installed {_profile.Bindings.Count - ignored.Count} bindings. " + skipped + (backup.Length > 0 ? $"Backup: {Path.GetFileName(backup)}" : "(no previous file to back up)"));
+            SetStatus($"Installed {fileBindings.Count - ignored.Count} bindings. " + skipped + (backup.Length > 0 ? $"Backup: {Path.GetFileName(backup)}" : "(no previous file to back up)"));
             RebuildDevices(); UpdateSync();
         }
         catch (Exception ex) { SetStatus("Install failed: " + ex.Message, true); }

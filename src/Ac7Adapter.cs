@@ -45,11 +45,6 @@ public sealed class Ac7Adapter : IGameAdapter
         new("Flight_AccelerationDeceleration", "Flight", "Hold: high-G turn", ActionKind.Button),
         new("Flight_AutoPilot", "Flight", "Hold: level aircraft", ActionKind.Button),
         new("Flight_Pause", "Flight", "Pause", ActionKind.Button),
-        new("Flight_HatSwitchUp", "Flight", "Hat up", ActionKind.Button),   // does nothing in single-player flight (tested, also with the camera
-        // axes cleared); empty in AC7's default file. Possibly multiplayer radio messages (unconfirmed).
-        new("Flight_HatSwitchDown", "Flight", "Hat down", ActionKind.Button),
-        new("Flight_HatSwitchLeft", "Flight", "Hat left", ActionKind.Button),
-        new("Flight_HatSwitchRight", "Flight", "Hat right", ActionKind.Button),
         new("Flight_CameraPitch", "Flight", "Look up / down", ActionKind.Axis),   // free-look camera (a pad's right stick)
         new("Flight_CameraYaw", "Flight", "Look left / right", ActionKind.Axis),
         new("UI_A", "Menus", "A (confirm)", ActionKind.Button, Nav: MenuNav.Confirm),
@@ -75,6 +70,25 @@ public sealed class Ac7Adapter : IGameAdapter
         new("UI_DPadDown", "Menus", "D-pad down", ActionKind.Button, Nav: MenuNav.Down),
         new("UI_DPadLeft", "Menus", "D-pad left", ActionKind.Button, Nav: MenuNav.Left),
         new("UI_DPadRight", "Menus", "D-pad right", ActionKind.Button, Nav: MenuNav.Right),
+        // Multiplayer: a community guide leaves these blank so the hat "does not send network messages", and AC7's flight-stick
+        // screen labels the T.Flight hat "Instant Messages (Multiplayer only)". They do nothing in single-player flight (tested).
+        // AC7 leaves them empty by default; which direction does what isn't documented.
+        new("Flight_HatSwitchUp", "Multiplayer", "Instant messages: hat up", ActionKind.Button),
+        new("Flight_HatSwitchDown", "Multiplayer", "Instant messages: hat down", ActionKind.Button),
+        new("Flight_HatSwitchLeft", "Multiplayer", "Instant messages: hat left", ActionKind.Button),
+        new("Flight_HatSwitchRight", "Multiplayer", "Instant messages: hat right", ActionKind.Button),
+    };
+
+    // Functions AC7 only offers on the keyboard (Options > Keyboard), named as AC7 names them, with its default keys.
+    // HOTAS Bridge holds the key while the bound button is held and AC7 is in front. Never written to Input.ini.
+    public IReadOnlyList<GameAction> KeyActions { get; } = new GameAction[]
+    {
+        new("Key_CameraControl", "Keyboard", "Camera Control Key", ActionKind.Button, Keys: new[] { KeyInput.LeftAlt }),
+        new("Key_HighlightTarget", "Keyboard", "Highlight Target", ActionKind.Button, Keys: new[] { KeyInput.F }),
+        new("Key_RadioMenu", "Keyboard", "Instant Radio Message Menu (multiplayer)", ActionKind.Button, Keys: new[] { KeyInput.T }),
+        new("Key_RadioUp", "Keyboard", "Move Instant Radio Cursor Up", ActionKind.Button, Keys: new[] { KeyInput.Up }),
+        new("Key_RadioDown", "Keyboard", "Move Instant Radio Cursor Down", ActionKind.Button, Keys: new[] { KeyInput.Down }),
+        new("Key_RadioCancel", "Keyboard", "Cancel Instant Radio Message", ActionKind.Button, Keys: new[] { KeyInput.Left }),
     };
 
     static readonly string[] EnableKeys = { "EnableJoystick", "EnableDeviceJoystick", "EnableDeviceFlight", "EnableDevice1stPerson" };

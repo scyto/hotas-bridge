@@ -51,8 +51,10 @@ public enum ActionKind { Axis, Button }
 /// measured per game and action; games don't agree on one rule.</param>
 /// <param name="Nav">For menu actions: the role they play when HOTAS Bridge drives the Xbox Game Bar with keys, so the
 /// same buttons that move around the game's menus move around the Game Bar.</param>
+/// <param name="Keys">For functions a game only offers on the keyboard: the keys HOTAS Bridge holds down while the bound
+/// button is held (game's default keys). Such actions are never written to the game's file.</param>
 public sealed record GameAction(string Key, string Group, string Description, ActionKind Kind, string? Gesture = null, bool GestureNegative = false,
-                                MenuNav? Nav = null);
+                                MenuNav? Nav = null, ushort[]? Keys = null);
 
 /// <summary>Menu roles, for driving the Xbox Game Bar (which takes Xbox controller, mouse or keyboard input, not a joystick).</summary>
 public enum MenuNav { Up, Down, Left, Right, Confirm, Back, Prev, Next }
