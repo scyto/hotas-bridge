@@ -176,7 +176,7 @@ sealed class DeviceView : Control
         if (EnsureFonts()) Relayout();
         var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias;
         var s = Device.State;
-        bool active = s.Buttons.Take(s.ButtonCount).Any(b => b) || s.Pov.Take(s.PovCount).Any(p => p >= 0);
+        bool active = Enumerable.Range(0, s.ButtonCount).Any(s.Lit) || s.Pov.Take(s.PovCount).Any(p => p >= 0);
         using (var bg = new SolidBrush(Theme.Panel2)) g.FillRectangle(bg, ClientRectangle);
         using (var pen = new Pen(active ? Theme.Amber : Theme.Line)) g.DrawRectangle(pen, 0, 0, Width - 1, Height - 1);
 
@@ -243,7 +243,7 @@ sealed class DeviceView : Control
             {
                 int k = i - from;
                 var r = new Rectangle(pad + (k % perRow) * cellW, y + (k / perRow) * (cellH + S(3)), cellW - S(3), cellH);
-                bool on = s.Buttons[i];
+                bool on = s.Lit(i);
                 using (var b = new SolidBrush(on ? Theme.Amber : Color.FromArgb(22, 24, 27))) g.FillRectangle(b, r);
                 using (var p = new Pen(on ? Theme.Amber : Theme.Line)) g.DrawRectangle(p, r);
                 TextRenderer.DrawText(g, (i + 1).ToString(), _mono, r, on ? Color.FromArgb(26, 18, 5) : Theme.Dim,

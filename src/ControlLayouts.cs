@@ -63,19 +63,30 @@ public static class ControlLayouts
             new ControlGroup("Mini-stick", S("Rx", "Forward / back"), S("Ry", "Left / right"), S("B1", "Click")),
             new ControlGroup("Hat", Hat(1)),
             new ControlGroup("Buttons", S("B2", "B2"), S("B3", "B3"), S("B4", "B4"), S("B11", "B11"), S("B18", "B18")),
-            new ControlGroup("Switch", S("B5", "Left"), S("B6", "Right"), S("B16", "Forward"), S("B17", "Back")),
+            // 16/17: the flaps control (user-confirmed). 5/6 are "left/right" in the guide but which control is unknown, so they
+            // stay under Other controls.
+            new ControlGroup("Flaps", S("B16", "Forward"), S("B17", "Back")),
             new ControlGroup("4-way", S("B7", "North"), S("B8", "East"), S("B9", "South"), S("B10", "West")),
             new ControlGroup("Rockers", S("B12", "1 up"), S("B13", "1 down"), S("B14", "2 up"), S("B15", "2 down")),
-            new ControlGroup("Upper pad", S("B23", "Outer press"), S("B24", "Outer left"), S("B25", "Outer right"), S("B26", "Inner left"), S("B27", "Inner right")),
-            new ControlGroup("Middle pad", S("B28", "Press"), S("B29", "Left"), S("B30", "Right")),
-            new ControlGroup("Lower pad", S("B31", "Press"), S("B32", "Left"), S("B33", "Right")),
+            // dials, not pads (user-confirmed). The upper dial's outer ring is the Z axis and its inner knob presses 23 (both
+            // user-confirmed); the guide's outer left/right (24/25) haven't been seen.
+            new ControlGroup("Upper dial", S("Z", "Outer ring (axis)"), S("B23", "Inner press"), S("B26", "Inner left"), S("B27", "Inner right"),
+                S("B24", "Outer left (not seen)"), S("B25", "Outer right (not seen)")),
+            new ControlGroup("Middle dial", S("B28", "Press"), S("B29", "Left"), S("B30", "Right")),
+            new ControlGroup("Lower dial", S("B31", "Press"), S("B32", "Left"), S("B33", "Right")),
             // one wheel, two modes (set on the throttle): analog = Slider1, digital = buttons 40/41 (user-confirmed)
             new ControlGroup("Rear wheel", S("Slider1", "Wheel (analog mode)"), S("B40", "Up (digital mode)"), S("B41", "Down (digital mode)")),
             new ControlGroup("Bottom-right control", S("Slider2", "Axis")),
-            new ControlGroup("Lever detents", S("B19", "Max"), S("B20", "Min"), S("B21", "Max"), S("B22", "Min"),
-                S("B34", "Forward"), S("B35", "Middle"), S("B36", "Back"), S("B37", "Forward"), S("B38", "Middle"), S("B39", "Back")),
-            // Z and Rz: two of the guide's ALT knob, thumb wheel and flap lever; not checked yet
-            new ControlGroup("Other axes (unconfirmed)", S("Z", "Z"), S("Rz", "Rz")),
+            // Buttons the levers press by themselves (the guide's "virtual detents"), measured: the centre one pulses ~20 ms
+            // as the lever passes the haptic detent (35 left / X, 38 right / Y, per the user); the others are held only while
+            // the lever is at the very end of its travel, and 19 fires with 34, 20 with 36 (and 21/37, 22/39) every time. The
+            // levers were linked in both tests, so which lever 19/20/34/36 vs 21/22/37/39 belong to follows the guide's numbering.
+            new ControlGroup("Left lever positions", S("B34", "Fully forward"), S("B35", "Passing centre detent"), S("B36", "Fully back"),
+                S("B19", "Fully forward (second button)"), S("B20", "Fully back (second button)")),
+            new ControlGroup("Right lever positions", S("B37", "Fully forward"), S("B38", "Passing centre detent"), S("B39", "Fully back"),
+                S("B21", "Fully forward (second button)"), S("B22", "Fully back (second button)")),
+            // Rz: not identified yet (the guide's axes still unaccounted for: ALT knob, thumb wheel, flap lever, finger wheel)
+            new ControlGroup("Other axes (unconfirmed)", S("Rz", "Rz")),
         },
         [Presets.VelocityOneRudder] = new[]
         {

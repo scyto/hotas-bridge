@@ -29,20 +29,22 @@ public static class ControlNames
         {
             // X/Y and Rx/Ry measured (Rx is the mini-stick's forward/back and Ry its left/right: the reverse of the usual
             // convention); Slider1 is the rear wheel in analog mode (buttons 40/41 in digital mode) and Slider2 the
-            // bottom-right control (user-confirmed). Z and Rz: two of the ALT knob, thumb wheel and flap lever, unconfirmed.
+            // bottom-right control, Z the upper dial's outer ring (user-confirmed). Rz unconfirmed.
             ["X"] = "Left lever", ["Y"] = "Right lever", ["Rx"] = "Mini-stick forward/back", ["Ry"] = "Mini-stick left/right",
-            ["Slider1"] = "Rear wheel (analog mode)", ["Slider2"] = "Bottom-right control",
-            ["B1"] = "Mini-stick click", ["B5"] = "Switch left", ["B6"] = "Switch right",
+            ["Slider1"] = "Rear wheel (analog mode)", ["Slider2"] = "Bottom-right control", ["Z"] = "Upper dial outer ring",
+            ["B1"] = "Mini-stick click",
             ["B7"] = "4-way north", ["B8"] = "4-way east", ["B9"] = "4-way south", ["B10"] = "4-way west",
             ["B12"] = "Rocker 12/13 up", ["B13"] = "Rocker 12/13 down", ["B14"] = "Rocker 14/15 up", ["B15"] = "Rocker 14/15 down",
-            ["B16"] = "Switch forward", ["B17"] = "Switch back",
-            ["B19"] = "Max detent", ["B20"] = "Min detent", ["B21"] = "Max detent", ["B22"] = "Min detent",
-            ["B23"] = "Upper outer press", ["B24"] = "Upper outer left", ["B25"] = "Upper outer right",
-            ["B26"] = "Upper inner left", ["B27"] = "Upper inner right",
-            ["B28"] = "Middle press", ["B29"] = "Middle left", ["B30"] = "Middle right",
-            ["B31"] = "Lower press", ["B32"] = "Lower left", ["B33"] = "Lower right",
-            ["B34"] = "Forward detent", ["B35"] = "Middle detent", ["B36"] = "Back detent",
-            ["B37"] = "Forward detent", ["B38"] = "Middle detent", ["B39"] = "Back detent",
+            ["B16"] = "Flaps forward", ["B17"] = "Flaps back", // user-confirmed; 5/6 unknown
+            // lever positions: see ControlLayouts (which lever 19/20/34/36 vs 21/22/37/39 belong to is from the guide's numbering)
+            ["B19"] = "Left lever fully forward (second button)", ["B20"] = "Left lever fully back (second button)",
+            ["B21"] = "Right lever fully forward (second button)", ["B22"] = "Right lever fully back (second button)",
+            ["B23"] = "Upper dial inner press", ["B24"] = "Upper dial outer left (not seen)", ["B25"] = "Upper dial outer right (not seen)",
+            ["B26"] = "Upper dial inner left", ["B27"] = "Upper dial inner right",
+            ["B28"] = "Middle dial press", ["B29"] = "Middle dial left", ["B30"] = "Middle dial right",
+            ["B31"] = "Lower dial press", ["B32"] = "Lower dial left", ["B33"] = "Lower dial right",
+            ["B34"] = "Left lever fully forward", ["B35"] = "Left lever passing centre detent", ["B36"] = "Left lever fully back",
+            ["B37"] = "Right lever fully forward", ["B38"] = "Right lever passing centre detent", ["B39"] = "Right lever fully back",
             ["B40"] = "Rear wheel up (digital mode)", ["B41"] = "Rear wheel down (digital mode)",
         },
         [Presets.VelocityOneRudder] = new Dictionary<string, string>

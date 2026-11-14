@@ -407,8 +407,8 @@ sealed class ControlsView : Panel
 
     static float Value(LiveDevice d, InputRef i) => i.Kind == InputKind.Axis && i.Index < d.State.Axes.Length ? d.State.Axes[i.Index] : 0f;
 
-    /// <summary>Lights up the names of controls being used: buttons held, hat directions pushed, axes moved from where they
-    /// were when the view was built. Repaints only the names that changed.</summary>
+    /// <summary>Lights up the names of controls being used: buttons held or just pressed (DeviceState.Lit), hat directions
+    /// pushed, axes moved from where they were when the view was built. Repaints only the names that changed.</summary>
     public void UpdateLive()
     {
         foreach (var row in _rows)
@@ -416,7 +416,7 @@ sealed class ControlsView : Panel
             var s = row.Dev.State;
             bool active = row.Input.Kind switch
             {
-                InputKind.Button => row.Input.Index < s.Buttons.Length && s.Buttons[row.Input.Index],
+                InputKind.Button => s.Lit(row.Input.Index),
                 InputKind.Pov => row.Input.Index < s.Pov.Length && DirectInputService.PovDir(s.Pov[row.Input.Index]) == row.Input.Direction,
                 _ => Math.Abs(Value(row.Dev, row.Input) - row.Rest) > 0.25f
             };
