@@ -408,14 +408,14 @@ sealed class ControlsView : Panel
 
     static float Value(LiveDevice d, InputRef i) => i.Kind == InputKind.Axis && i.Index < d.State.Axes.Length ? d.State.Axes[i.Index] : 0f;
 
-    /// <summary>True while the axis is moving: it lights when it gets 0.3% of its range (~200 of 65536) away from where it
-    /// last lit, so one detent of the throttle's top dial shows and slow turns add up, but resting jitter doesn't (measured:
-    /// the throttle's levers and rear wheel wobble by 64–128 at rest; the stick and rudder send nothing).</summary>
+    /// <summary>True while the axis is moving: any change lights it. Measured: untouched devices send no reports at all (no
+    /// resting jitter on the stick, throttle or rudder), and the throttle moves in steps of 64 of 65536, so one detent of its
+    /// top dial is about one step (0.004 on the -1..1 scale); a 0.3% threshold needed 2-3 detents.</summary>
     static bool AxisMoving(Row row)
     {
         float v = Value(row.Dev, row.Input);
         long now = Environment.TickCount64;
-        if (Math.Abs(v - row.Anchor) > 0.006f) { row.Anchor = v; row.LitUntil = now + DeviceState.LitMs; }
+        if (v != row.Anchor) { row.Anchor = v; row.LitUntil = now + DeviceState.LitMs; }
         return now < row.LitUntil;
     }
 
