@@ -11,6 +11,9 @@ public sealed record InputRef(InputKind Kind, int Index, char Direction = '\0', 
     // Axis index: 0 X, 1 Y, 2 Z, 3 Rx, 4 Ry, 5 Rz, 6 Slider0, 7 Slider1
     public static readonly string[] AxisNames = { "X", "Y", "Z", "Rx", "Ry", "Rz", "Slider1", "Slider2" };
 
+    /// <summary>The opposite hat direction ('U' ↔ 'D', 'L' ↔ 'R').</summary>
+    public static char OppositeDir(char d) => d switch { 'U' => 'D', 'D' => 'U', 'L' => 'R', 'R' => 'L', _ => d };
+
     public override string ToString() => Kind switch
     {
         InputKind.Axis => AxisNames[Index] + (Invert ? " (inv)" : ""),

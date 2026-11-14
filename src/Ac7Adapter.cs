@@ -162,6 +162,20 @@ public sealed class Ac7Adapter : IGameAdapter
 
     public InputRef? ParseInput(string v) => ParseToken(v.Trim());
 
+    /// <summary>A hat as an axis: "POV_U1 + POV_D1:R" reads +1 with the hat up and -1 with it down (community-documented;
+    /// confirmed in-game for the camera on the Flightdeck Stick's hat 1).</summary>
+    public string? HatAxis(int hat, char positive) =>
+        hat is < 0 or >= 4 || positive is not ('U' or 'D' or 'L' or 'R') ? null
+            : $"POV_{positive}{hat + 1} + POV_{InputRef.OppositeDir(positive)}{hat + 1}:R";
+
+    public (int hat, char positive)? ParseHatAxis(string text)
+    {
+        var m = Regex.Match(text.Trim(), @"^POV_([UDLR])([1-4])\s*\+\s*POV_([UDLR])\2:R$", RegexOptions.IgnoreCase);
+        if (!m.Success) return null;
+        char p = char.ToUpperInvariant(m.Groups[1].Value[0]), n = char.ToUpperInvariant(m.Groups[3].Value[0]);
+        return n == InputRef.OppositeDir(p) ? (int.Parse(m.Groups[2].Value) - 1, p) : null;
+    }
+
     static InputRef? ParseToken(string v)
     {
         var m = Regex.Match(v, @"^(X|Y|Z|Rx|Ry|Rz|Slider1|Slider2)(:R)?$", RegexOptions.IgnoreCase);

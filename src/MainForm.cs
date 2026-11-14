@@ -219,12 +219,15 @@ sealed class MainForm : Form
                 : (b.Raw ?? (b.Input != null ? _adapter.Format(b.Input) ?? "(unsupported)" : ""));
             if (b != null && !app && _adapter.UnsupportedDevice(b.DeviceType, b.DeviceName) != null) inputText = "(device ignored by game) " + inputText;
             bool listening = _listenKey == a.Key;
-            bool inverted = b?.Raw == null && b?.Input is { Kind: InputKind.Axis, Invert: true };
+            var hatAxis = b?.Raw is { } rawText && !app ? _adapter.ParseHatAxis(rawText) : null;
+            bool inverted = b?.Raw == null ? b?.Input is { Kind: InputKind.Axis, Invert: true }
+                          : hatAxis is { } hx && hx.positive != DefaultHatPositive(a, hx.positive is 'U' or 'D');
             var gr = _grid.Rows[_grid.Rows.Add()];
             gr.Tag = a;
             gr.Cells["Desc"].Value = a.Description + (a.Kind == ActionKind.Axis ? "  ·axis" : "");
             gr.Cells["Device"].Value = b?.DeviceName ?? "";
-            gr.Cells["Control"].Value = b is { Raw: null, Input: { } bound } ? ControlNames.For(b.DeviceProduct, bound) ?? "" : "";
+            gr.Cells["Control"].Value = b is { Raw: null, Input: { } bound } ? ControlNames.For(b.DeviceProduct, bound) ?? ""
+                : hatAxis is { } ha ? $"Hat {ha.hat + 1} {(ha.positive is 'U' or 'D' ? "up/down" : "left/right")}" : "";
             gr.Cells["Input"].Value = listening ? "waiting for input…" : inputText;
             gr.Cells["Key"].Value = sys ? "n/a" : a.Keys != null ? $"n/a (presses {KeyInput.Describe(a.Keys)})" : a.Key;
             gr.Cells["Detect"].Value = listening ? "Press…" : "Detect";
@@ -306,7 +309,12 @@ sealed class MainForm : Form
         {
             b.Input = inp with { Invert = !inp.Invert }; b.Raw = null; SaveProfile(); RefreshGrid();
         }
-        else if (col == "Inv" && a.Kind == ActionKind.Axis) SetStatus("Bind an axis first (Detect), then you can invert it.", true);
+        else if (col == "Inv" && a.Kind == ActionKind.Axis && _profile.Bindings.TryGetValue(a.Key, out var hb) && hb.Raw is { } hr
+                 && _adapter.ParseHatAxis(hr) is { } hat && _adapter.HatAxis(hat.hat, InputRef.OppositeDir(hat.positive)) is { } flipped)
+        {
+            hb.Raw = flipped; SaveProfile(); RefreshGrid();
+        }
+        else if (col == "Inv" && a.Kind == ActionKind.Axis) SetStatus("Bind an axis or a hat first (Detect), then you can invert it.", true);
         else if (col == "Clear" && a.Group == SystemButtons.Group) { _settings.System.Remove(a.Key); SaveSettings(); RefreshGrid(); }
         else if (col == "Clear") { _profile.Bindings.Remove(a.Key); SaveProfile(); RefreshGrid(); }
     }
@@ -337,7 +345,7 @@ sealed class MainForm : Form
         if (_di != null) foreach (var d in _di.Devices) _baseline[d.Info.InstanceGuid] = Snap(d.State);
         var a = ActionFor(key);
         var what = AppHandled(a) ? "press a button" :
-                   a.Kind == ActionKind.Button ? "press a button or push a hat" : a.Gesture ?? "move the axis you want";
+                   a.Kind == ActionKind.Button ? "press a button or push a hat" : (a.Gesture ?? "move the axis you want") + ", or push a hat";
         SetStatus($"Listening for {key}: {what}. Click Press… or Esc to cancel.");
     }
 
@@ -367,6 +375,12 @@ sealed class MainForm : Form
                 // axes only: a throttle presses detent buttons as its lever moves, which must not win
                 for (int i = 0; i < 8; i++)
                     if (s.AxisPresent[i] && Math.Abs(s.Axes[i] - b.axes[i]) > 0.5f && Bind(d, AxisBinding(action, i, b.axes[i], s.Axes[i]))) return;
+                // or a hat, used as an axis: pushing up/down binds the vertical pair, left/right the horizontal one
+                for (int h = 0; h < s.PovCount; h++)
+                {
+                    char dir = DirectInputService.PovDir(s.Pov[h]);
+                    if (dir != '\0' && b.pov[h] < 0 && BindHatAxis(d, action, h, dir)) return;
+                }
                 continue;
             }
             // buttons: buffered presses catch short pulses (e.g. wheels in button mode)
@@ -383,6 +397,26 @@ sealed class MainForm : Form
                 if (dir != '\0' && s.Pov[h] != b.pov[h] && Bind(d, new InputRef(InputKind.Pov, h, dir))) return;
             }
         }
+    }
+
+    /// <summary>Which hat direction reads as positive for an axis action, as Detect writes it: up (or right), unless the game
+    /// wants the gesture's direction to read negative (AC7's throttle: forward is faster at lower values).</summary>
+    static char DefaultHatPositive(GameAction a, bool vertical) => vertical ? (a.GestureNegative ? 'D' : 'U') : (a.GestureNegative ? 'L' : 'R');
+
+    /// <summary>Binds a hat as an axis for an axis action ("POV_U1 + POV_D1:R" in AC7): pushing it up or down binds the
+    /// vertical pair, left or right the horizontal one.</summary>
+    bool BindHatAxis(LiveDevice d, GameAction action, int hat, char pushed)
+    {
+        var devWhy = _adapter.UnsupportedDevice(d.Info.DeviceType, d.Info.ProductName);
+        if (devWhy != null) { SetStatus(devWhy + $" Click {d.Info.DeviceType} ▾ on its card to change what it reports as.", true); ShowListenNote(devWhy); return false; }
+        bool vertical = pushed is 'U' or 'D';
+        var raw = _adapter.HatAxis(hat, DefaultHatPositive(action, vertical));
+        if (raw == null) { var why = $"{GameShortName} can't use hat {hat + 1} as an axis."; SetStatus(why + " Try another control.", true); ShowListenNote(why); return false; }
+        _listenKey = null;
+        _profile.Bindings[action.Key] = new Binding { DeviceProduct = d.Info.ProductGuid, DeviceName = d.Info.ProductName, DeviceType = d.Info.DeviceType, Raw = raw };
+        SaveProfile(); RefreshGrid();
+        SetStatus($"{action.Description} = hat {hat + 1} {(vertical ? "up/down" : "left/right")} on {d.Info.ProductName} ({raw}). If it's the wrong way round, click ⇅.");
+        return true;
     }
 
     bool Bind(LiveDevice d, InputRef input)
