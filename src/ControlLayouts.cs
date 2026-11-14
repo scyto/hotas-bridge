@@ -67,7 +67,7 @@ public static class ControlLayouts
             new ControlGroup("Buttons", S("B2", "B2"), S("B3", "B3"), S("B4", "B4"), S("B11", "B11"), S("B18", "B18")),
             // the flaps lever is Slider2, and the throttle holds 16 at its up end (65535) and 17 at its down end (0), like the
             // main levers' end buttons (user-confirmed; watcher log)
-            new ControlGroup("Flaps", S("Slider2", "Lever (axis)"), S("B16", "Up"), S("B17", "Down")),
+            new ControlGroup("Flaps", S("Slider2", "Lever (axis)"), S("B16", "Up (stays on)"), S("B17", "Down (stays on)")),
             new ControlGroup("4-way", S("B7", "North"), S("B8", "East"), S("B9", "South"), S("B10", "West")),
             new ControlGroup("Rockers", S("B12", "1 up"), S("B13", "1 down"), S("B14", "2 up"), S("B15", "2 down")),
             // dials, not pads (user-confirmed). Hangar's Dial Response page: the upper dial's outer ring is either an analog

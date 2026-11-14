@@ -35,7 +35,7 @@ public static class ControlNames
             ["B1"] = "Mini-stick click", ["B5"] = "Thumb lever up (stays on)", ["B6"] = "Thumb lever down (stays on)",
             ["B7"] = "4-way north", ["B8"] = "4-way east", ["B9"] = "4-way south", ["B10"] = "4-way west",
             ["B12"] = "Rocker 12/13 up", ["B13"] = "Rocker 12/13 down", ["B14"] = "Rocker 14/15 up", ["B15"] = "Rocker 14/15 down",
-            ["B16"] = "Flaps up", ["B17"] = "Flaps down", // held at the flaps lever's ends (user-confirmed)
+            ["B16"] = "Flaps up (stays on)", ["B17"] = "Flaps down (stays on)", // held at the flaps lever's ends (user-confirmed)
             // lever positions: see ControlLayouts (which lever 19/20/34/36 vs 21/22/37/39 belong to is from the guide's numbering)
             ["B19"] = "Left lever fully forward (second button)", ["B20"] = "Left lever fully back (second button)",
             ["B21"] = "Right lever fully forward (second button)", ["B22"] = "Right lever fully back (second button)",
