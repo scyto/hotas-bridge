@@ -41,14 +41,15 @@ public sealed class Ac7Adapter : IGameAdapter
         new("Flight_Target", "Flight", "Change target", ActionKind.Button),
         new("Flight_Radar", "Flight", "Radar map", ActionKind.Button),
         new("Flight_Flare", "Flight", "Flares", ActionKind.Button),
-        new("Flight_View", "Flight", "Toggle camera", ActionKind.Button),
+        new("Flight_View", "Flight", "Change view", ActionKind.Button),
         new("Flight_AccelerationDeceleration", "Flight", "Hold: high-G turn", ActionKind.Button),
         new("Flight_AutoPilot", "Flight", "Hold: level aircraft", ActionKind.Button),
         new("Flight_Pause", "Flight", "Pause", ActionKind.Button),
-        new("Flight_HatSwitchUp", "Flight", "Hat up", ActionKind.Button),   // purpose unknown: guides say camera, but it did nothing in flight (tested)
-        new("Flight_HatSwitchDown", "Flight", "Hat down", ActionKind.Button),
-        new("Flight_HatSwitchLeft", "Flight", "Hat left", ActionKind.Button),
-        new("Flight_HatSwitchRight", "Flight", "Hat right", ActionKind.Button),
+        new("Flight_HatSwitchUp", "Flight", "Radio message cursor up (multiplayer)", ActionKind.Button),   // instant radio messages: AC7's keyboard screen
+        // has the same four on the arrow keys (→ menu, ↑ ↓ cursor, ← cancel) and its flight-stick screen labels the hat "Instant Messages (Multiplayer only)"
+        new("Flight_HatSwitchDown", "Flight", "Radio message cursor down (multiplayer)", ActionKind.Button),
+        new("Flight_HatSwitchLeft", "Flight", "Cancel radio message (multiplayer)", ActionKind.Button),
+        new("Flight_HatSwitchRight", "Flight", "Radio message menu (multiplayer)", ActionKind.Button),
         new("Flight_CameraPitch", "Flight", "Look up / down", ActionKind.Axis),   // free-look camera (a pad's right stick)
         new("Flight_CameraYaw", "Flight", "Look left / right", ActionKind.Axis),
         new("UI_A", "Menus", "A (confirm)", ActionKind.Button, Nav: MenuNav.Confirm),
