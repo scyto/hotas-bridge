@@ -40,15 +40,15 @@ public static class ControlNames
             ["B11"] = "Rear button",
             ["B12"] = "Rear rocker 12/13 up", ["B13"] = "Rear rocker 12/13 down", ["B14"] = "Rear rocker 14/15 up", ["B15"] = "Rear rocker 14/15 down",
             ["B16"] = "Flaps up (stays on)", ["B17"] = "Flaps down (stays on)", // held at the flaps lever's ends (user-confirmed)
-            // lever end stops and Hangar dead zones: see ControlLayouts
+            // lever end stops and Hangar zones: see ControlLayouts
             ["B19"] = "Left lever forward end stop", ["B20"] = "Left lever back end stop",
             ["B21"] = "Right lever forward end stop", ["B22"] = "Right lever back end stop",
             ["B23"] = "Upper dial inner press", ["B24"] = "Upper dial outer ring left (digital mode)", ["B25"] = "Upper dial outer ring right (digital mode)",
             ["B26"] = "Upper dial inner left", ["B27"] = "Upper dial inner right",
             ["B28"] = "Middle dial press", ["B29"] = "Middle dial left", ["B30"] = "Middle dial right",
             ["B31"] = "Lower dial press", ["B32"] = "Lower dial left", ["B33"] = "Lower dial right",
-            ["B34"] = "Left lever top dead zone", ["B35"] = "Left lever middle dead zone (centre detent)", ["B36"] = "Left lever bottom dead zone",
-            ["B37"] = "Right lever top dead zone", ["B38"] = "Right lever middle dead zone (centre detent)", ["B39"] = "Right lever bottom dead zone",
+            ["B34"] = "Left lever top zone", ["B35"] = "Left lever middle zone (centre detent)", ["B36"] = "Left lever bottom zone",
+            ["B37"] = "Right lever top zone", ["B38"] = "Right lever middle zone (centre detent)", ["B39"] = "Right lever bottom zone",
             ["B40"] = "Rear wheel up (digital mode)", ["B41"] = "Rear wheel down (digital mode)",
         },
         [Presets.VelocityOneRudder] = new Dictionary<string, string>
