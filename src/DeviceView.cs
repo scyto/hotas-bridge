@@ -63,6 +63,10 @@ sealed class DeviceView : Control
     public int? PhysicalButtons { get => _physical; set { _physical = value; Remeasure(); } }
     int? _physical;
     int ShownButtons => Math.Min(Math.Min(Device.State.ButtonCount, 128), _physical ?? 128);
+    /// <summary>How many hats physically exist, when the device reports more (Presets.PhysicalHats); null = trust it.</summary>
+    public int? PhysicalHats { get => _physicalHats; set { _physicalHats = value; Remeasure(); } }
+    int? _physicalHats;
+    int ShownHats => Math.Min(Device.State.PovCount, _physicalHats ?? 4);
     string? _gameName;
     void Remeasure() { Height = CalcHeight(Math.Max(Width, S(340))); Invalidate(); }
     /// <summary>The "reports as" button; clicking it raises TypeClicked.</summary>
@@ -132,8 +136,8 @@ sealed class DeviceView : Control
     {
         EnsureFonts();
         var s = Device.State;
-        int axes = s.AxisPresent.Count(x => x);
-        return Pad + HeaderH + axes * AxisRowH + S(8) + (s.PovCount > 0 ? S(40) : 0) + ButtonsHeight(width) + Pad;
+        int axes = Enumerable.Range(0, s.AxisPresent.Length).Count(i => Presets.AxisShown(Device.Info.ProductGuid, s, i));
+        return Pad + HeaderH + axes * AxisRowH + S(8) + (ShownHats > 0 ? S(40) : 0) + ButtonsHeight(width) + Pad;
     }
 
     /// <summary>Button groups as (heading, first index, end index): one unlabelled group, or, when the device has more buttons
@@ -172,14 +176,14 @@ sealed class DeviceView : Control
         if (EnsureFonts()) Relayout();
         var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias;
         var s = Device.State;
-        bool active = s.Buttons.Take(s.ButtonCount).Any(b => b) || s.Pov.Take(s.PovCount).Any(p => p >= 0);
+        bool active = Enumerable.Range(0, s.ButtonCount).Any(s.Lit) || s.Pov.Take(s.PovCount).Any(p => p >= 0);
         using (var bg = new SolidBrush(Theme.Panel2)) g.FillRectangle(bg, ClientRectangle);
         using (var pen = new Pen(active ? Theme.Amber : Theme.Line)) g.DrawRectangle(pen, 0, 0, Width - 1, Height - 1);
 
         int pad = Pad, line = LineH, y = pad;
         TextRenderer.DrawText(g, Device.Info.ProductName, _bold, new Point(pad, y), Theme.Text);
         y += TitleRowH + S(2);
-        var id = $"{Device.Info.VidPid} · {ShownButtons} btn · {s.PovCount} hat" + (Overridden ? " · type changed in Windows" : "");
+        var id = $"{Device.Info.VidPid} · {ShownButtons} btn · {ShownHats} hat" + (Overridden ? " · type changed in Windows" : "");
         TextRenderer.DrawText(g, id, _mono, new Point(pad, y), Theme.Dim);
         y += line;
         if (Note != null) { y += S(2); TextRenderer.DrawText(g, Note, _mono, new Point(pad, y), Theme.Amber); y += line; }
@@ -192,7 +196,7 @@ sealed class DeviceView : Control
         int barX = pad + labelW, barW = Math.Max(S(20), Width - barX - gap - valueW - pad), barH = S(9);
         for (int i = 0; i < 8; i++)
         {
-            if (!s.AxisPresent[i]) continue;
+            if (!Presets.AxisShown(Device.Info.ProductGuid, s, i)) continue;
             int ty = y + (rowH - line) / 2;
             TextRenderer.DrawText(g, InputRef.AxisNames[i], _mono, new Point(pad, ty), Theme.Dim);
             var r = new Rectangle(barX, y + (rowH - barH) / 2, barW, barH);
@@ -207,10 +211,10 @@ sealed class DeviceView : Control
         }
         y += S(8);
 
-        if (s.PovCount > 0)
+        if (ShownHats > 0)
         {
             int rad = S(14), labelGap = S(4), step = 2 * rad + labelGap + TextRenderer.MeasureText("Hat 4", _mono).Width + S(16);
-            for (int h = 0; h < s.PovCount; h++)
+            for (int h = 0; h < ShownHats; h++)
             {
                 int cx = pad + rad + h * step, cy = y + S(20);
                 using (var p = new Pen(Theme.Line)) g.DrawEllipse(p, cx - rad, cy - rad, 2 * rad, 2 * rad);
@@ -239,7 +243,7 @@ sealed class DeviceView : Control
             {
                 int k = i - from;
                 var r = new Rectangle(pad + (k % perRow) * cellW, y + (k / perRow) * (cellH + S(3)), cellW - S(3), cellH);
-                bool on = s.Buttons[i];
+                bool on = s.Lit(i);
                 using (var b = new SolidBrush(on ? Theme.Amber : Color.FromArgb(22, 24, 27))) g.FillRectangle(b, r);
                 using (var p = new Pen(on ? Theme.Amber : Theme.Line)) g.DrawRectangle(p, r);
                 TextRenderer.DrawText(g, (i + 1).ToString(), _mono, r, on ? Color.FromArgb(26, 18, 5) : Theme.Dim,

@@ -13,6 +13,13 @@ public sealed class DeviceState
     public int ButtonCount;
     /// <summary>Buttons that went down since the last poll (from buffered data, so short pulses are not lost).</summary>
     public List<int> Pressed = new();
+    /// <summary>When each button's last press stops showing (Environment.TickCount64), so presses shorter than a redraw,
+    /// like the throttle's ~20 ms centre-detent pulse, still light up.</summary>
+    public long[] LitUntil = new long[128];
+    public const int LitMs = 250;
+
+    /// <summary>Held now, or pressed in the last LitMs: what the UI shows.</summary>
+    public bool Lit(int button) => button < 128 && (Buttons[button] || Environment.TickCount64 < LitUntil[button]);
 }
 
 public sealed class LiveDevice : IDisposable
@@ -64,6 +71,8 @@ public sealed class LiveDevice : IDisposable
                 int off = (int)u.Offset, b0 = (int)JoystickOffset.Buttons0;
                 if (off >= b0 && off < b0 + 128 && (u.Value & 0x80) != 0) State.Pressed.Add(off - b0);
             }
+            long until = Environment.TickCount64 + DeviceState.LitMs;
+            foreach (var b in State.Pressed) State.LitUntil[b] = until;
             var s = _dev.GetCurrentJoystickState();
             State.Axes[0] = Norm(s.X); State.Axes[1] = Norm(s.Y); State.Axes[2] = Norm(s.Z);
             State.Axes[3] = Norm(s.RotationX); State.Axes[4] = Norm(s.RotationY); State.Axes[5] = Norm(s.RotationZ);

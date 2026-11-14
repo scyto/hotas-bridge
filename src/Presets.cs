@@ -16,6 +16,18 @@ public static class Presets
     /// fire), the throttle reports 47 but has 1–41.</summary>
     public static readonly IReadOnlyDictionary<Guid, int> PhysicalButtons = new Dictionary<Guid, int> { [FlightdeckStick] = 33, [FlightdeckThrottle] = 41 };
 
+    /// <summary>Hats that physically exist, for devices that report more: the Flightdeck Stick reports 3 but has 2 (the
+    /// third never moves; user-confirmed).</summary>
+    public static readonly IReadOnlyDictionary<Guid, int> PhysicalHats = new Dictionary<Guid, int> { [FlightdeckStick] = 2 };
+
+    /// <summary>Axes a device reports that nothing on it moves (indexes into InputRef.AxisNames): the Flightdeck Stick's
+    /// Slider1. The stick's thumb wheel in analog mode is Slider2, and the user found nothing that moves Slider1.</summary>
+    public static readonly IReadOnlyDictionary<Guid, int[]> PhantomAxes = new Dictionary<Guid, int[]> { [FlightdeckStick] = new[] { 6 } };
+
+    /// <summary>Whether to show a reported axis: the device reports it and it isn't in PhantomAxes.</summary>
+    public static bool AxisShown(Guid product, DeviceState s, int axis) =>
+        axis < s.AxisPresent.Length && s.AxisPresent[axis] && !(PhantomAxes.TryGetValue(product, out var p) && p.Contains(axis));
+
     static InputRef B(int n) => new(InputKind.Button, n - 1);
     static InputRef A(int i, bool inv = false) => new(InputKind.Axis, i, '\0', inv);
     static InputRef H(int hat, char d) => new(InputKind.Pov, hat - 1, d);
