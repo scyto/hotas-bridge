@@ -45,10 +45,10 @@ public sealed class Ac7Adapter : IGameAdapter
         new("Flight_AccelerationDeceleration", "Flight", "Hold: high-G turn", ActionKind.Button),
         new("Flight_AutoPilot", "Flight", "Hold: level aircraft", ActionKind.Button),
         new("Flight_Pause", "Flight", "Pause", ActionKind.Button),
-        new("Flight_HatSwitchUp", "Flight", "Quick look up", ActionKind.Button),   // camera glances (community guides; confirm in-game)
-        new("Flight_HatSwitchDown", "Flight", "Quick look down", ActionKind.Button),
-        new("Flight_HatSwitchLeft", "Flight", "Quick look left", ActionKind.Button),
-        new("Flight_HatSwitchRight", "Flight", "Quick look right", ActionKind.Button),
+        new("Flight_HatSwitchUp", "Flight", "Hat up", ActionKind.Button),   // purpose unknown: guides say camera, but it did nothing in flight (tested)
+        new("Flight_HatSwitchDown", "Flight", "Hat down", ActionKind.Button),
+        new("Flight_HatSwitchLeft", "Flight", "Hat left", ActionKind.Button),
+        new("Flight_HatSwitchRight", "Flight", "Hat right", ActionKind.Button),
         new("Flight_CameraPitch", "Flight", "Look up / down", ActionKind.Axis),   // free-look camera (a pad's right stick)
         new("Flight_CameraYaw", "Flight", "Look left / right", ActionKind.Axis),
         new("UI_A", "Menus", "A (confirm)", ActionKind.Button, Nav: MenuNav.Confirm),
