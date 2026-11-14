@@ -16,6 +16,9 @@ public interface IGameAdapter
     /// <summary>Functions the game only offers on the keyboard (no setting in its file). HOTAS Bridge presses their keys
     /// (GameAction.Keys) while the bound button is held and the game is in front.</summary>
     IReadOnlyList<GameAction> KeyActions { get; }
+    /// <summary>The order sections (GameAction.Section) are listed in, within a tab; actions without one come last, in list
+    /// order. Display only: the file is written in Actions order.</summary>
+    IReadOnlyList<string> Sections => Array.Empty<string>();
     /// <summary>How many buttons the game reads (AC7: 32). Device cards grey out the rest; system buttons can still use them.</summary>
     int MaxButtons { get; }
 

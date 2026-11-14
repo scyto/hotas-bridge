@@ -215,7 +215,8 @@ sealed class MainForm : Form, IControlsHost
     {
         if (_controlsMode) { _controls.UpdateView(); return; } // the hidden grid is rebuilt when it's shown again
         _grid.Rows.Clear();
-        foreach (var a in GridActions.Where(a => a.Group == _tab))
+        DataGridViewRow? previous = null;
+        foreach (var a in TabActions())
         {
             bool sys = a.Group == SystemButtons.Group, app = AppHandled(a);
             var b = sys ? SystemBindingFor(a) : _profile.Bindings.GetValueOrDefault(a.Key);
@@ -228,6 +229,11 @@ sealed class MainForm : Form, IControlsHost
                           : hatAxis is { } hx && hx.positive != DefaultHatPositive(a, hx.positive is 'U' or 'D');
             var gr = _grid.Rows[_grid.Rows.Add()];
             gr.Tag = a;
+            // a gap between sections (maneuvering, weapons, …): the row before a new section gets a thicker divider
+            // (the divider is drawn inside the row, so the row grows by it rather than squashing its text)
+            if (previous?.Tag is GameAction pa && pa.Section != a.Section)
+            { int gap = LogicalToDeviceUnits(8); previous.Height += gap; previous.DividerHeight = gap; }
+            previous = gr;
             gr.Cells["Desc"].Value = a.Description + (a.Kind == ActionKind.Axis ? "  ·axis" : "");
             gr.Cells["Device"].Value = b?.DeviceName ?? "";
             gr.Cells["Control"].Value = b is { Raw: null, Input: { } bound } ? ControlNames.For(b.DeviceProduct, bound) ?? ""
@@ -306,6 +312,16 @@ sealed class MainForm : Form, IControlsHost
     /// <summary>The grid's rows: the game's actions, then the system buttons (which work in every game).</summary>
     IEnumerable<GameAction> GridActions => _adapter.Actions.Concat(_adapter.KeyActions).Concat(SystemButtons.All);
 
+    /// <summary>The current tab's actions by section (IGameAdapter.Sections order), then list order; actions without a
+    /// section come last. The grid's row order, and the order of the controls view's dropdowns.</summary>
+    IEnumerable<GameAction> TabActions()
+    {
+        var order = _adapter.Sections;
+        int Rank(GameAction a) { int i = a.Section == null ? -1 : IndexOf(order, a.Section); return i < 0 ? int.MaxValue : i; }
+        return GridActions.Where(a => a.Group == _tab).Select((a, i) => (a, i)).OrderBy(t => Rank(t.a)).ThenBy(t => t.i).Select(t => t.a);
+    }
+    static int IndexOf(IReadOnlyList<string> list, string value) { for (int i = 0; i < list.Count; i++) if (list[i] == value) return i; return -1; }
+
     /// <summary>Actions HOTAS Bridge carries out itself (system buttons, keyboard-only functions): any button on any device,
     /// buttons only, never written to the game's file.</summary>
     static bool AppHandled(GameAction a) => a.Group == SystemButtons.Group || a.Keys != null;
@@ -318,7 +334,7 @@ sealed class MainForm : Form, IControlsHost
 
     // ---------- controls view (IControlsHost): same bindings, edited control by control ----------
     IReadOnlyList<LiveDevice> IControlsHost.Devices => _di?.Devices ?? (IReadOnlyList<LiveDevice>)Array.Empty<LiveDevice>();
-    IEnumerable<GameAction> IControlsHost.TabActions => GridActions.Where(a => a.Group == _tab);
+    IEnumerable<GameAction> IControlsHost.TabActions => TabActions(); // dropdowns in the grid's order; the physical grouping is unchanged
     Binding? IControlsHost.BindingFor(GameAction a) => a.Group == SystemButtons.Group ? SystemBindingFor(a) : _profile.Bindings.GetValueOrDefault(a.Key);
     string? IControlsHost.Syntax(InputRef input) => _adapter.Format(input);
     int IControlsHost.ButtonCount(LiveDevice d) => Math.Min(d.State.ButtonCount, Presets.PhysicalButtons.TryGetValue(d.Info.ProductGuid, out var n) ? n : 128);
