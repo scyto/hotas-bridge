@@ -43,9 +43,13 @@ public sealed class Binding
     public string DeviceName { get; set; } = "";
     /// <summary>DirectInput device type when bound (e.g. "Gamepad"); some games ignore whole device types.</summary>
     public string? DeviceType { get; set; }
+    /// <summary>The control. For an axis action this is an axis (Invert = reversed), or a hat used as an axis: InputKind.Pov
+    /// with Direction the way that reads positive (IsHatAxisFor).</summary>
     public InputRef? Input { get; set; }
-    /// <summary>Optional raw override in the game's own syntax (e.g. "Rx:R + Ry:R").</summary>
+    /// <summary>Optional raw override in the game's own syntax (e.g. "Rx:R + Ry:R"); only for games with ITypedBindings.</summary>
     public string? Raw { get; set; }
+    /// <summary>Whether this binds <paramref name="a"/> (an axis action) to a hat used as an axis.</summary>
+    public bool IsHatAxisFor(GameAction a) => a.Kind == ActionKind.Axis && Raw == null && Input is { Kind: InputKind.Pov };
     /// <summary>Set for a shaped axis: HOTAS Bridge reads Input, applies this (AxisShape.Apply) and sends the result to vJoy's
     /// axis VJoyAxis, and the game's file binds the action to that vJoy axis instead (MainForm.ForFile). Only for a plain
     /// axis Input, not Raw.</summary>

@@ -9,8 +9,11 @@ interface IControlsHost
     /// <summary>The current tab's actions.</summary>
     IEnumerable<GameAction> TabActions { get; }
     Binding? BindingFor(GameAction a);
-    /// <summary>The game's syntax for a control (e.g. "Button28", "POV_U1"), to spot it inside typed bindings.</summary>
+    /// <summary>The game's typed syntax for a control (e.g. "Button28", "POV_U1"), to spot it inside typed bindings; null
+    /// for games without one (ITypedBindings).</summary>
     string? Syntax(InputRef input);
+    /// <summary>What a binding is, briefly ("Trigger, stage 1", "Hat 1 up/down", or the game's text).</summary>
+    string BindingText(GameAction a, Binding b);
     int ButtonCount(LiveDevice d);
     int HatCount(LiveDevice d);
     /// <summary>Null if the action can go on this control, else why not.</summary>
@@ -163,11 +166,16 @@ sealed class ControlsView : Panel
         foreach (var row in _rows)
         {
             var product = row.Dev.Info.ProductGuid;
-            var onThis = _actions.Where(a => _host.BindingFor(a) is { Raw: null, Input: { } bi } b && b.DeviceProduct == product && Same(bi, row.Input)).ToList();
-            // typed bindings (e.g. a hat used as an axis, "POV_U1 + POV_D1:R") that use this control
+            var onThis = _actions.Where(a => _host.BindingFor(a) is { Raw: null, Input: { } bi } b && !b.IsHatAxisFor(a) && b.DeviceProduct == product && Same(bi, row.Input)).ToList();
+            // a hat used as an axis uses both of its directions on this hat (up/down or left/right): shown read-only on both
+            var hatAxes = row.Input.Kind != InputKind.Pov ? new List<GameAction>() : _actions.Where(a => _host.BindingFor(a) is { } b && b.IsHatAxisFor(a)
+                && b.DeviceProduct == product && b.Input!.Index == row.Input.Index
+                && (b.Input.Direction == row.Input.Direction || InputRef.OppositeDir(b.Input.Direction) == row.Input.Direction)).ToList();
+            // typed bindings (e.g. "Y:R ! Button10") that use this control
             var token = _host.Syntax(row.Input);
             var inText = token == null ? new List<GameAction>() : _actions.Where(a => _host.BindingFor(a) is { Raw: { } raw } b && b.DeviceProduct == product
                 && System.Text.RegularExpressions.Regex.IsMatch(raw, $@"(?<![A-Za-z0-9_]){System.Text.RegularExpressions.Regex.Escape(token)}(?![0-9])")).ToList();
+            inText.AddRange(hatAxes);
             bool readOnly = inText.Count > 0 || onThis.Count > 1;
             row.Current = readOnly ? null : onThis.FirstOrDefault();
             row.ReadOnlyText = readOnly ? string.Join(" + ", onThis.Concat(inText).Select(a => a.Description).Distinct()) : null;
@@ -332,7 +340,7 @@ sealed class ControlsView : Panel
         if (otherRow) _tip.SetToolTip(_canvas, _hot == null ? null : TipFor(_hot));
     }
 
-    static string? TipFor(Row r) => r.ReadOnlyText is { } t ? $"{t}: a typed binding or several actions use this control. Edit it in the grid." : null;
+    static string? TipFor(Row r) => r.ReadOnlyText is { } t ? $"{t}: a typed binding, a hat used as an axis, or several actions use this control. Edit it in the grid." : null;
 
     void Press((Row? row, Part part) h)
     {
@@ -390,7 +398,7 @@ sealed class ControlsView : Panel
     string? Where(GameAction a, LiveDevice here)
     {
         if (_host.BindingFor(a) is not { } b) return null;
-        string what = b.Raw ?? (b.Input is { } i ? ControlNames.For(b.DeviceProduct, i) ?? _host.Syntax(i) ?? i.ToString() : "?");
+        string what = _host.BindingText(a, b);
         return b.DeviceProduct == here.Info.ProductGuid ? what : $"{what} on {b.DeviceName}";
     }
 

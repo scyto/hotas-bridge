@@ -13,7 +13,7 @@ namespace HotasBridge;
 /// are ignored, so a section written for them never takes effect.
 /// AC7 rewrites Input.ini when it exits, from what it loaded at startup, so a file written while it runs is undone.
 /// </summary>
-public sealed class Ac7Adapter : IGameAdapter
+public sealed class Ac7Adapter : IGameAdapter, ITypedBindings
 {
     public string Id => "ac7";
     public string Name => "Ace Combat 7: Skies Unknown";
@@ -110,7 +110,11 @@ public sealed class Ac7Adapter : IGameAdapter
         deviceType == null || ReadTypes.Contains(deviceType) ? null :
         $"AC7 ignores {deviceName}: Windows reports it as a {deviceType} device, and AC7 only reads joystick, flight and 1st-person devices.";
 
-    public string? Format(InputRef i)
+    /// <summary>A hat on an axis action is the hat used as an axis (HatAxis); anything else is its single token.</summary>
+    public string? Format(GameAction action, InputRef i) =>
+        action.Kind == ActionKind.Axis && i.Kind == InputKind.Pov ? HatAxis(i.Index, i.Direction) : Token(i);
+
+    public string? Token(InputRef i)
     {
         if (Unsupported(i) != null) return null;
         return i.Kind switch
@@ -125,14 +129,14 @@ public sealed class Ac7Adapter : IGameAdapter
     static string Header(Guid product) => "Joystick-" + product.ToString().ToUpperInvariant();
 
     // ---- typed bindings, and reading bindings back from a file ----
-    static readonly Regex Token = new(@"^(?:X|Y|Z|Rx|Ry|Rz|Slider[12]|POV_[UDLR][1-4]|Button\d{1,3})(?::[PNRC])*$", RegexOptions.IgnoreCase);
+    static readonly Regex TokenPattern = new(@"^(?:X|Y|Z|Rx|Ry|Rz|Slider[12]|POV_[UDLR][1-4]|Button\d{1,3})(?::[PNRC])*$", RegexOptions.IgnoreCase);
 
     /// <summary>Inputs (X … Slider2, POV_U1 … POV_R4, Button1 … Button32) with modifiers :P :N :R :C, joined by &amp; ! + &gt; &lt;.</summary>
     public string? CheckRaw(string text)
     {
         var parts = Regex.Split(text.Trim(), @"\s*[&!+<>]\s*").Where(p => p.Length > 0).ToList();
         if (parts.Count == 0) return "That's empty.";
-        var bad = parts.FirstOrDefault(p => !Token.IsMatch(p));
+        var bad = parts.FirstOrDefault(p => !TokenPattern.IsMatch(p));
         if (bad != null) return $"\"{bad}\" isn't AC7 binding syntax (e.g. Button3, POV_U1, Y:R).";
         var over = parts.Select(p => Regex.Match(p, @"^Button(\d+)", RegexOptions.IgnoreCase))
                         .FirstOrDefault(m => m.Success && int.Parse(m.Groups[1].Value) > MaxButtons);
@@ -144,33 +148,38 @@ public sealed class Ac7Adapter : IGameAdapter
     public Dictionary<string, Binding> ReadBindings(string path)
     {
         var result = new Dictionary<string, Binding>();
-        var keys = Actions.ToDictionary(a => a.Key, a => a.Key, StringComparer.OrdinalIgnoreCase);
+        var actions = Actions.ToDictionary(a => a.Key, StringComparer.OrdinalIgnoreCase);
         foreach (var s in Parse(File.ReadAllText(path)))
         {
             if (s.Header == null || !s.Header.StartsWith("Joystick-", StringComparison.OrdinalIgnoreCase) || !Guid.TryParse(s.Header[9..], out var product)) continue;
             string name = s.Lines.Where(l => KeyOf(l).Equals("ProductName", StringComparison.OrdinalIgnoreCase)).Select(ValOf).FirstOrDefault() ?? "";
             foreach (var l in s.Lines)
             {
-                if (!keys.TryGetValue(KeyOf(l), out var key) || result.ContainsKey(key)) continue;
+                if (!actions.TryGetValue(KeyOf(l), out var action) || result.ContainsKey(action.Key)) continue;
                 var v = ValOf(l);
                 if (v.Length == 0) continue;
-                var input = ParseToken(v);
+                var input = ParseInput(action, v);
                 if (input == null && CheckRaw(v) != null) continue; // not a binding AC7 could read (e.g. stray text)
-                result[key] = new Binding { DeviceProduct = product, DeviceName = name, Input = input, Raw = input == null ? v : null };
+                result[action.Key] = new Binding { DeviceProduct = product, DeviceName = name, Input = input, Raw = input == null ? v : null };
             }
         }
         return result;
     }
 
-    public InputRef? ParseInput(string v) => ParseToken(v.Trim());
+    public InputRef? ParseInput(GameAction action, string v)
+    {
+        v = v.Trim();
+        if (action.Kind == ActionKind.Axis && ParseHatAxis(v) is { } h) return new InputRef(InputKind.Pov, h.hat, h.positive);
+        return ParseToken(v);
+    }
 
     /// <summary>A hat as an axis: "POV_U1 + POV_D1:R" reads +1 with the hat up and -1 with it down (community-documented;
     /// confirmed in-game for the camera on the Flightdeck Stick's hat 1).</summary>
-    public string? HatAxis(int hat, char positive) =>
+    static string? HatAxis(int hat, char positive) =>
         hat is < 0 or >= 4 || positive is not ('U' or 'D' or 'L' or 'R') ? null
             : $"POV_{positive}{hat + 1} + POV_{InputRef.OppositeDir(positive)}{hat + 1}:R";
 
-    public (int hat, char positive)? ParseHatAxis(string text)
+    static (int hat, char positive)? ParseHatAxis(string text)
     {
         var m = Regex.Match(text.Trim(), @"^POV_([UDLR])([1-4])\s*\+\s*POV_([UDLR])\2:R$", RegexOptions.IgnoreCase);
         if (!m.Success) return null;
@@ -255,7 +264,7 @@ public sealed class Ac7Adapter : IGameAdapter
             }
             int pi = sec.Lines.FindIndex(l => KeyOf(l).Equals("ProductName", StringComparison.OrdinalIgnoreCase));
             var lines = Actions.Where(a => g.Any(kv => kv.Key == a.Key))
-                .Select(a => { var b = g.First(kv => kv.Key == a.Key).Value; return $"{a.Key}={b.Raw ?? Format(b.Input!)}"; })
+                .Select(a => { var b = g.First(kv => kv.Key == a.Key).Value; return $"{a.Key}={b.Raw ?? Format(a, b.Input!)}"; })
                 .Where(l => !l.EndsWith("="));
             sec.Lines.InsertRange(pi >= 0 ? pi + 1 : 0, lines);
         }

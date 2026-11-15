@@ -224,13 +224,13 @@ sealed class MainForm : Form, IControlsHost
             bool sys = a.Group == SystemButtons.Group, app = AppHandled(a);
             var b = sys ? SystemBindingFor(a) : _profile.Bindings.GetValueOrDefault(a.Key);
             string inputText = b == null ? "" : app ? (b.Input is { Kind: InputKind.Button } ib ? $"Button{ib.Index + 1}" : "")
-                : (b.Raw ?? (b.Input != null ? _adapter.Format(b.Input) ?? "(unsupported)" : ""));
+                : (b.Raw ?? (b.Input != null ? _adapter.Format(a, b.Input) ?? "(unsupported)" : ""));
             if (b != null && !app && _adapter.UnsupportedDevice(b.DeviceType, b.DeviceName) != null) inputText = "(device ignored by game) " + inputText;
             if (b is { IsShaped: true }) inputText += $" → vJoy {InputRef.AxisNames[b.VJoyAxis]}"; // what the game's file will name
             bool listening = _listenKey == a.Key;
-            var hatAxis = b?.Raw is { } rawText && !app ? _adapter.ParseHatAxis(rawText) : null;
-            bool inverted = b?.Raw == null ? b?.Input is { Kind: InputKind.Axis, Invert: true }
-                          : hatAxis is { } hx && hx.positive != DefaultHatPositive(a, hx.positive is 'U' or 'D');
+            (int hat, char positive)? hatAxis = b != null && !app && b.IsHatAxisFor(a) ? (b.Input!.Index, b.Input.Direction) : null;
+            bool inverted = hatAxis is { } hx ? hx.positive != DefaultHatPositive(a, hx.positive is 'U' or 'D')
+                          : b?.Raw == null && b?.Input is { Kind: InputKind.Axis, Invert: true };
             var gr = _grid.Rows[_grid.Rows.Add()];
             gr.Tag = a;
             // a gap between sections (maneuvering, weapons, …): the row before a new section gets a thicker divider
@@ -240,8 +240,8 @@ sealed class MainForm : Form, IControlsHost
             previous = gr;
             gr.Cells["Desc"].Value = a.Description + (a.Kind == ActionKind.Axis ? "  ·axis" : "");
             gr.Cells["Device"].Value = b?.DeviceName ?? "";
-            gr.Cells["Control"].Value = b is { Raw: null, Input: { } bound } ? ControlNames.For(b.DeviceProduct, bound) ?? ""
-                : hatAxis is { } ha ? $"Hat {ha.hat + 1} {(ha.positive is 'U' or 'D' ? "up/down" : "left/right")}" : "";
+            gr.Cells["Control"].Value = hatAxis is { } ha ? HatAxisLabel(ha.hat, ha.positive)
+                : b is { Raw: null, Input: { } bound } ? ControlNames.For(b.DeviceProduct, bound) ?? "" : "";
             gr.Cells["Input"].Value = listening ? "waiting for input…" : inputText;
             gr.Cells["Key"].Value = sys ? "n/a" : a.Keys != null ? $"n/a (presses {KeyInput.Describe(a.Keys)})" : a.Key;
             gr.Cells["Detect"].Value = listening ? "Press…" : "Detect";
@@ -254,7 +254,8 @@ sealed class MainForm : Form, IControlsHost
                     $"{GameShortName} only has this on the keyboard ({KeyInput.Describe(a.Keys!)}, its default key). HOTAS Bridge holds that key " +
                     $"while you hold the button, when {GameShortName} is the window in front, so keep HOTAS Bridge running.";
             }
-            if (listening) { gr.DefaultCellStyle.BackColor = Color.FromArgb(60, 42, 12); gr.Cells["Input"].ReadOnly = true; }
+            if (listening || _adapter is not ITypedBindings) gr.Cells["Input"].ReadOnly = true; // no typed syntax: bind with Detect
+            if (listening) gr.DefaultCellStyle.BackColor = Color.FromArgb(60, 42, 12);
             if (a.Kind != ActionKind.Axis) gr.Cells["Inv"] = new DataGridViewTextBoxCell { Value = "" }; // only axes can be inverted
             else
             {
@@ -350,7 +351,8 @@ sealed class MainForm : Form, IControlsHost
     IReadOnlyList<LiveDevice> IControlsHost.Devices => _di?.Devices ?? (IReadOnlyList<LiveDevice>)Array.Empty<LiveDevice>();
     IEnumerable<GameAction> IControlsHost.TabActions => TabActions(); // dropdowns in the grid's order; the physical grouping is unchanged
     Binding? IControlsHost.BindingFor(GameAction a) => a.Group == SystemButtons.Group ? SystemBindingFor(a) : _profile.Bindings.GetValueOrDefault(a.Key);
-    string? IControlsHost.Syntax(InputRef input) => _adapter.Format(input);
+    string? IControlsHost.Syntax(InputRef input) => (_adapter as ITypedBindings)?.Token(input);
+    string IControlsHost.BindingText(GameAction a, Binding b) => BindingText(a, b);
     int IControlsHost.ButtonCount(LiveDevice d) => Math.Min(d.State.ButtonCount, Presets.PhysicalButtons.TryGetValue(d.Info.ProductGuid, out var n) ? n : 128);
     int IControlsHost.HatCount(LiveDevice d) => Math.Min(d.State.PovCount, Presets.PhysicalHats.TryGetValue(d.Info.ProductGuid, out var n) ? n : 4);
     string? IControlsHost.CanAssign(GameAction a, LiveDevice d, InputRef input) =>
@@ -372,7 +374,7 @@ sealed class MainForm : Form, IControlsHost
             SaveProfile();
         }
         RefreshGrid();
-        SetStatus($"{a.Description} → {controlLabel} on {d.Info.ProductName}" + (old != null ? $" (was {DescribeBinding(old)})" : "") +
+        SetStatus($"{a.Description} → {controlLabel} on {d.Info.ProductName}" + (old != null ? $" (was {DescribeBinding(a, old)})" : "") +
                   (replaced != null && replaced != a ? $". {replaced.Description} is now unbound." : "."));
     }
 
@@ -397,12 +399,21 @@ sealed class MainForm : Form, IControlsHost
     }
 
     /// <summary>"Button28 on Flightdeck Stick (Trigger, stage 1)", for status messages.</summary>
-    string DescribeBinding(Binding b)
+    string DescribeBinding(GameAction a, Binding b)
     {
-        string what = b.Raw ?? (b.Input != null ? _adapter.Format(b.Input) ?? b.Input.ToString() : "?");
-        string? name = b.Raw == null && b.Input != null ? ControlNames.For(b.DeviceProduct, b.Input) : null;
+        string what = b.Raw ?? (b.Input != null ? _adapter.Format(a, b.Input) ?? b.Input.ToString() : "?");
+        string? name = b.IsHatAxisFor(a) ? HatAxisLabel(b.Input!.Index, b.Input.Direction)
+                     : b.Raw == null && b.Input != null ? ControlNames.For(b.DeviceProduct, b.Input) : null;
         return $"{what} on {b.DeviceName}" + (name != null ? $" ({name})" : "");
     }
+
+    /// <summary>What a binding is, briefly: the control's name ("Trigger, stage 1", "Hat 1 up/down"), else the game's text.</summary>
+    string BindingText(GameAction a, Binding b) =>
+        b.Raw ?? (b.Input is not { } i ? "?"
+                  : b.IsHatAxisFor(a) ? HatAxisLabel(i.Index, i.Direction)
+                  : ControlNames.For(b.DeviceProduct, i) ?? _adapter.Format(a, i) ?? i.ToString());
+
+    static string HatAxisLabel(int hat, char positive) => $"Hat {hat + 1} {(positive is 'U' or 'D' ? "up/down" : "left/right")}";
 
     void Grid_CellContentClick(object? sender, DataGridViewCellEventArgs e)
     {
@@ -418,10 +429,9 @@ sealed class MainForm : Form, IControlsHost
         {
             b.Input = inp with { Invert = !inp.Invert }; b.Raw = null; SaveProfile(); RefreshGrid();
         }
-        else if (col == "Inv" && a.Kind == ActionKind.Axis && _profile.Bindings.TryGetValue(a.Key, out var hb) && hb.Raw is { } hr
-                 && _adapter.ParseHatAxis(hr) is { } hat && _adapter.HatAxis(hat.hat, InputRef.OppositeDir(hat.positive)) is { } flipped)
+        else if (col == "Inv" && _profile.Bindings.TryGetValue(a.Key, out var hb) && hb.IsHatAxisFor(a))
         {
-            hb.Raw = flipped; SaveProfile(); RefreshGrid();
+            hb.Input = hb.Input! with { Direction = InputRef.OppositeDir(hb.Input.Direction) }; SaveProfile(); RefreshGrid();
         }
         else if (col == "Inv" && a.Kind == ActionKind.Axis) SetStatus("Bind an axis or a hat first (Detect), then you can invert it.", true);
         else if (col == "Shape" && a.Kind == ActionKind.Axis) ShowShapeDialog(a);
@@ -432,13 +442,15 @@ sealed class MainForm : Form, IControlsHost
     void Grid_CellEndEdit(object? sender, DataGridViewCellEventArgs e)
     {
         if (_grid.Rows[e.RowIndex].Tag is not GameAction a || _grid.Columns[e.ColumnIndex].Name != "Input" || AppHandled(a)) return;
+        if (_adapter is not ITypedBindings typed) return; // the cell is read-only for games without a typed syntax
         if (_listenKey == a.Key) { BeginInvoke(new Action(RefreshGrid)); return; } // the cell shows Detect's prompt, not a binding
         var text = (_grid.Rows[e.RowIndex].Cells[e.ColumnIndex].Value as string)?.Trim() ?? "";
         if (text.Length == 0) { _profile.Bindings.Remove(a.Key); }
-        else if (_adapter.CheckRaw(text) is { } why) { SetStatus(why + " Not saved.", true); BeginInvoke(new Action(RefreshGrid)); return; }
+        else if (typed.CheckRaw(text) is { } why) { SetStatus(why + " Not saved.", true); BeginInvoke(new Action(RefreshGrid)); return; }
         else if (_profile.Bindings.TryGetValue(a.Key, out var b))
         {
-            if (_adapter.ParseInput(text) is { } single) { b.Input = single; b.Raw = null; } // a plain control: a normal binding again
+            // a single control (or a hat used as an axis) becomes a normal binding again; anything else is kept as typed
+            if (typed.ParseInput(a, text) is { } single) { b.Input = single; b.Raw = null; }
             else b.Raw = text;
             SetStatus($"{a.Key} = {text}");
         }
@@ -515,19 +527,20 @@ sealed class MainForm : Form, IControlsHost
     /// wants the gesture's direction to read negative (AC7's throttle: forward is faster at lower values).</summary>
     static char DefaultHatPositive(GameAction a, bool vertical) => vertical ? (a.GestureNegative ? 'D' : 'U') : (a.GestureNegative ? 'L' : 'R');
 
-    /// <summary>Binds a hat as an axis for an axis action ("POV_U1 + POV_D1:R" in AC7): pushing it up or down binds the
-    /// vertical pair, left or right the horizontal one.</summary>
+    /// <summary>Binds a hat as an axis for an axis action (a hat input whose Direction reads positive; AC7 writes it as
+    /// "POV_U1 + POV_D1:R"): pushing it up or down binds the vertical pair, left or right the horizontal one.</summary>
     bool BindHatAxis(LiveDevice d, GameAction action, int hat, char pushed)
     {
         var devWhy = _adapter.UnsupportedDevice(d.Info.DeviceType, d.Info.ProductName);
         if (devWhy != null) { SetStatus(devWhy + $" Click {d.Info.DeviceType} ▾ on its card to change what it reports as.", true); ShowListenNote(devWhy); return false; }
         bool vertical = pushed is 'U' or 'D';
-        var raw = _adapter.HatAxis(hat, DefaultHatPositive(action, vertical));
-        if (raw == null) { var why = $"{GameShortName} can't use hat {hat + 1} as an axis."; SetStatus(why + " Try another control.", true); ShowListenNote(why); return false; }
+        var input = new InputRef(InputKind.Pov, hat, DefaultHatPositive(action, vertical));
+        var text = _adapter.Format(action, input);
+        if (text == null) { var why = $"{GameShortName} can't use hat {hat + 1} as an axis."; SetStatus(why + " Try another control.", true); ShowListenNote(why); return false; }
         _listenKey = null;
-        PutBinding(action.Key, new Binding { DeviceProduct = d.Info.ProductGuid, DeviceName = d.Info.ProductName, DeviceType = d.Info.DeviceType, Raw = raw });
+        PutBinding(action.Key, new Binding { DeviceProduct = d.Info.ProductGuid, DeviceName = d.Info.ProductName, DeviceType = d.Info.DeviceType, Input = input });
         SaveProfile(); RefreshGrid();
-        SetStatus($"{action.Description} = hat {hat + 1} {(vertical ? "up/down" : "left/right")} on {d.Info.ProductName} ({raw}). If it's the wrong way round, click ⇅.");
+        SetStatus($"{action.Description} = hat {hat + 1} {(vertical ? "up/down" : "left/right")} on {d.Info.ProductName} ({text}). If it's the wrong way round, click ⇅.");
         return true;
     }
 
@@ -564,7 +577,7 @@ sealed class MainForm : Form, IControlsHost
         PutBinding(key, new Binding { DeviceProduct = d.Info.ProductGuid, DeviceName = d.Info.ProductName, DeviceType = d.Info.DeviceType, Input = input });
         SaveProfile(); RefreshGrid();
         var gesture = ActionFor(key).Gesture;
-        SetStatus($"{key} = {_adapter.Format(input)} on {d.Info.ProductName}" +
+        SetStatus($"{key} = {_adapter.Format(ActionFor(key), input)} on {d.Info.ProductName}" +
                   (input.Invert && gesture != null ? " (inverted: this device reports that movement backwards). If it's the wrong way round, click ⇅." :
                    gesture != null ? ". If it's the wrong way round, click ⇅." : ""));
         return true;
@@ -778,11 +791,11 @@ sealed class MainForm : Form, IControlsHost
     {
         if (!_profile.Bindings.TryGetValue(a.Key, out var b) || b.Raw != null || b.Input is not { Kind: InputKind.Axis } input)
         {
-            SetStatus(b?.Raw != null ? "Shaping needs a single axis; this one is typed text or a hat. Bind an axis with Detect first."
+            SetStatus(b != null && (b.Raw != null || b.IsHatAxisFor(a)) ? "Shaping needs a single axis; this one is typed text or a hat. Bind an axis with Detect first."
                                      : "Bind an axis first (Detect), then you can shape it.", true);
             return;
         }
-        string control = ControlNames.For(b.DeviceProduct, input) ?? _adapter.Format(input) ?? InputRef.AxisNames[input.Index];
+        string control = ControlNames.For(b.DeviceProduct, input) ?? _adapter.Format(a, input) ?? InputRef.AxisNames[input.Index];
         bool wasShaped = b.IsShaped;
         using (var dlg = new ShapeDialog(a, b, control, GameShortName, () => LiveAxis(b), FreeVJoyAxis)) dlg.ShowDialog(this);
         SaveProfile(); RefreshGrid();
@@ -950,6 +963,7 @@ sealed class MainForm : Form, IControlsHost
     void LoadGame()
     {
         _profile = ProfileStore.Load(_adapter.Id);
+        if (BindingUpgrade.Apply(_adapter, _profile)) SaveProfile(); // hats as axes used to be stored as AC7 text
         SyncBindingTypes(); // older profiles have no device type, and a device's type can be changed
         _path.Text = _adapter.ConfigPath + (File.Exists(_adapter.ConfigPath) ? "" : "   (not found: run the game once with your devices connected)");
         RebuildTabs(); RefreshGrid(); RebuildDevices(); UpdateSync();
