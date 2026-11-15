@@ -168,7 +168,7 @@ sealed class MainForm : Form, IControlsHost
         _grid.DefaultCellStyle = new DataGridViewCellStyle(_grid.DefaultCellStyle) { Font = Theme.Ui };
         StyleTabs();
         foreach (var name in new[] { "Key", "Input" })
-            _grid.Columns[name].DefaultCellStyle = new DataGridViewCellStyle(_grid.Columns[name].DefaultCellStyle) { Font = Theme.Mono };
+            _grid.Columns[name]!.DefaultCellStyle = new DataGridViewCellStyle(_grid.Columns[name]!.DefaultCellStyle) { Font = Theme.Mono };
     }
 
     // ---------- grid ----------
@@ -195,8 +195,8 @@ sealed class MainForm : Form, IControlsHost
         g.Columns.Add(new DataGridViewButtonColumn { Name = "Clear", HeaderText = "Clear", ToolTipText = "Remove the binding", FillWeight = 6, FlatStyle = FlatStyle.Flat });
         foreach (var name in new[] { "Detect", "Inv", "Shape", "Clear" })
         {
-            g.Columns[name].HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleCenter;
-            g.Columns[name].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+            g.Columns[name]!.HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleCenter;
+            g.Columns[name]!.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
         }
         g.CellContentClick += Grid_CellContentClick;
         g.CellEndEdit += Grid_CellEndEdit;
@@ -209,7 +209,7 @@ sealed class MainForm : Form, IControlsHost
         _grid.ColumnHeadersHeight = Math.Max(LogicalToDeviceUnits(30), TextRenderer.MeasureText("Ag", Theme.UiBold).Height + LogicalToDeviceUnits(10));
         _grid.RowTemplate.Height = Math.Max(LogicalToDeviceUnits(28), TextRenderer.MeasureText("Ag", Theme.Ui).Height + LogicalToDeviceUnits(10));
         foreach (var name in new[] { "Detect", "Inv", "Shape", "Clear" }) // narrow columns: never cut off their heading
-            _grid.Columns[name].MinimumWidth = TextRenderer.MeasureText(_grid.Columns[name].HeaderText, Theme.UiBold).Width + LogicalToDeviceUnits(18);
+            _grid.Columns[name]!.MinimumWidth = TextRenderer.MeasureText(_grid.Columns[name]!.HeaderText, Theme.UiBold).Width + LogicalToDeviceUnits(18);
     }
 
     int CardWidth => _devices.ClientSize.Width - _devices.Padding.Horizontal;

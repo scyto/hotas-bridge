@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Drawing.Drawing2D;
 
 namespace HotasBridge;
@@ -48,23 +49,23 @@ sealed class DeviceView : Control
 {
     public LiveDevice Device { get; }
     string? _note;
-    public string? Note { get => _note; set { _note = value; Height = CalcHeight(Math.Max(Width, S(340))); Invalidate(); } }
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)] public string? Note { get => _note; set { _note = value; Height = CalcHeight(Math.Max(Width, S(340))); Invalidate(); } }
     /// <summary>True when the selected game ignores this device as it reports now: the type button turns amber.</summary>
-    public bool Warn { get => _warn; set { _warn = value; StyleTypeButton(); } }
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)] public bool Warn { get => _warn; set { _warn = value; StyleTypeButton(); } }
     /// <summary>True when HOTAS Bridge (or anyone) has overridden the type this device reports.</summary>
-    public bool Overridden { get; set; }
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)] public bool Overridden { get; set; }
     /// <summary>How many buttons the selected game reads; the rest are drawn greyed (they still light up when pressed).</summary>
-    public int ButtonLimit { get => _buttonLimit; set { _buttonLimit = value; Remeasure(); } }
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)] public int ButtonLimit { get => _buttonLimit; set { _buttonLimit = value; Remeasure(); } }
     int _buttonLimit = 128;
     /// <summary>The selected game's name. When the device has more buttons than the game reads, the buttons are shown in two
     /// labelled groups: the ones the game reads, and the rest (which system buttons can still use).</summary>
-    public string? GameName { get => _gameName; set { _gameName = value; Remeasure(); } }
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)] public string? GameName { get => _gameName; set { _gameName = value; Remeasure(); } }
     /// <summary>How many buttons physically exist, when the device reports more (Presets.PhysicalButtons); null = trust it.</summary>
-    public int? PhysicalButtons { get => _physical; set { _physical = value; Remeasure(); } }
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)] public int? PhysicalButtons { get => _physical; set { _physical = value; Remeasure(); } }
     int? _physical;
     int ShownButtons => Math.Min(Math.Min(Device.State.ButtonCount, 128), _physical ?? 128);
     /// <summary>How many hats physically exist, when the device reports more (Presets.PhysicalHats); null = trust it.</summary>
-    public int? PhysicalHats { get => _physicalHats; set { _physicalHats = value; Remeasure(); } }
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)] public int? PhysicalHats { get => _physicalHats; set { _physicalHats = value; Remeasure(); } }
     int? _physicalHats;
     int ShownHats => Math.Min(Device.State.PovCount, _physicalHats ?? 4);
     string? _gameName;
