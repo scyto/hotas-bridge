@@ -75,16 +75,21 @@ public enum ActionKind { Axis, Button }
 /// <param name="Section">What kind of action it is within its tab (AC7 Flight: Maneuvering, Weapons, Map, Camera, Pause).
 /// The grid lists a tab's actions by section, in IGameAdapter.Sections order, with a gap between sections; the controls
 /// view's dropdowns use the same order.</param>
+/// <param name="Pair">For games that bind each half of an axis action on its own row (Squadrons' Pitch Up / Pitch Down): the
+/// other half's key. Detect binds the half of the control that moved and gives the other row the opposite half.</param>
 public sealed record GameAction(string Key, string Group, string Description, ActionKind Kind, string? Gesture = null, bool GestureNegative = false,
-                                MenuNav? Nav = null, ushort[]? Keys = null, string? Section = null);
+                                MenuNav? Nav = null, ushort[]? Keys = null, string? Section = null, string? Pair = null);
 
 /// <summary>Menu roles, for driving the Xbox Game Bar (which takes Xbox controller, mouse or keyboard input, not a joystick).</summary>
 public enum MenuNav { Up, Down, Left, Right, Confirm, Back, Prev, Next }
 
 /// <summary>A preset: bindings for one device model (by product GUID) in one game, plus optionally its system buttons
 /// (Guide, Share: see SystemButtons), keyed by action key.</summary>
+/// <param name="Replaces">Loading it also unbinds whatever else this device does in the tabs the preset covers, so the device
+/// ends up exactly as the preset says (Squadrons). Without it, only the preset's own actions change (AC7).</param>
+/// <param name="IfFree">Actions set only when they aren't bound on another device (yaw on stick twist, unless pedals have it).</param>
 public sealed record Preset(string Name, string GameId, Guid DeviceProduct, string DeviceName, IReadOnlyDictionary<string, InputRef> Map,
-                            IReadOnlyDictionary<string, InputRef>? System = null);
+                            IReadOnlyDictionary<string, InputRef>? System = null, bool Replaces = false, IReadOnlyCollection<string>? IfFree = null);
 
 public sealed class GameProfile
 {

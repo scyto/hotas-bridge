@@ -31,6 +31,29 @@ public static class Presets
     static InputRef B(int n) => new(InputKind.Button, n - 1);
     static InputRef A(int i, bool inv = false) => new(InputKind.Axis, i, '\0', inv);
     static InputRef H(int hat, char d) => new(InputKind.Pov, hat - 1, d);
+    static InputRef Half(int i, char d) => new(InputKind.Axis, i, d); // '+' or '-' half of axis i (Squadrons)
+
+    /// <summary>Puts a preset's bindings into a profile (system buttons are the caller's). With Replaces, first unbinds the
+    /// device's other bindings on the tabs the preset covers; IfFree actions bound on another device stay there. Returns how
+    /// many it set, removed and left alone.</summary>
+    public static (int Set, int Removed, int Kept) Apply(Preset p, GameProfile profile, IEnumerable<GameAction> actions, string deviceName, string? deviceType)
+    {
+        var byKey = actions.GroupBy(a => a.Key).ToDictionary(g => g.Key, g => g.First());
+        int removed = 0, kept = 0;
+        if (p.Replaces)
+        {
+            var tabs = p.Map.Keys.Select(k => byKey.GetValueOrDefault(k)?.Group).OfType<string>().ToHashSet();
+            foreach (var (k, b) in profile.Bindings.ToList())
+                if (b.DeviceProduct == p.DeviceProduct && !p.Map.ContainsKey(k) && byKey.TryGetValue(k, out var a) && tabs.Contains(a.Group) && a.Keys == null)
+                { profile.Bindings.Remove(k); removed++; }
+        }
+        foreach (var (k, v) in p.Map)
+        {
+            if (p.IfFree?.Contains(k) == true && profile.Bindings.TryGetValue(k, out var cur) && cur.DeviceProduct != p.DeviceProduct) { kept++; continue; }
+            profile.Bindings[k] = new Binding { DeviceProduct = p.DeviceProduct, DeviceName = deviceName, DeviceType = deviceType, Input = v };
+        }
+        return (p.Map.Count - kept, removed, kept);
+    }
 
     /// <summary>Numbers from the VelocityOne Flightdeck Quick Flight Guide.</summary>
     public static readonly IReadOnlyList<Preset> BuiltIn = new[]
@@ -63,6 +86,51 @@ public static class Presets
         {
             ["Flight_Yaw"] = A(2),                // rudder; confirmed in-game once the rudder reports as Flight
         }),
+
+        // STAR WARS: Squadrons, agreed with the user on 2026-11-15 from community layouts (Thrustmaster's suggested HOTAS
+        // mapping, EA's manual, Steam guides): trigger fires, hat 1 runs power, stick X rolls and pedals or twist yaw, boost /
+        // cycle targets / ping on the throttle. Axis actions are two rows, one per half (+ = the action's positive half).
+        // These replace what the device does on the Flight tab (Hangar and Menus are left as they are).
+        new Preset("Flightdeck Stick – Squadrons", "squadrons", FlightdeckStick, "Flightdeck Stick", new Dictionary<string, InputRef>
+        {
+            ["Starship.Pitch+"] = Half(1, '+'), ["Starship.Pitch-"] = Half(1, '-'), // Pitch Up = pull back (Y-AXIS DOWN)
+            ["Starship.Roll+"] = Half(0, '+'), ["Starship.Roll-"] = Half(0, '-'),
+            ["Starship.Yaw+"] = Half(2, '+'), ["Starship.Yaw-"] = Half(2, '-'),     // twist, only if pedals don't have yaw
+            ["Starship.Fire"] = B(28),                                              // trigger stage 1
+            ["Starship.FireAuxiliaryWeaponOneMain"] = H(2, 'L'), ["Starship.FireAuxiliaryWeaponTwoMain"] = H(2, 'R'),
+            ["Starship.ControlEnginePower"] = H(1, 'L'), ["Starship.ControlWeaponPower"] = H(1, 'U'),
+            ["Starship.ControlShieldPower"] = H(1, 'R'), ["Starship.ControlBalancePower"] = H(1, 'D'),
+            ["Starship.PowerTransfer"] = B(7),                                      // D-pad west: focus shields / convert power wheel
+            ["Starship.PowerTransferMenuSelect"] = B(1),
+            ["Starship.PowerTransferMenuX+"] = H(1, 'R'), ["Starship.PowerTransferMenuX-"] = H(1, 'L'),
+            ["Starship.PowerTransferMenuY+"] = H(1, 'U'), ["Starship.PowerTransferMenuY-"] = H(1, 'D'),
+            ["Starship.ShieldFront"] = Half(4, '-'), ["Starship.ShieldBack"] = Half(4, '+'), // thumbstick up / down
+            ["Starship.ShieldBalance"] = B(3),                                      // thumbstick click
+            ["Starship.Targeting"] = B(1),                                          // FIRE pad: select target ahead (hold: targeting wheel)
+            ["Starship.TargetingMenuSelectTargetingMethod"] = B(1),
+            ["Starship.TargetingMenuX+"] = Half(3, '+'), ["Starship.TargetingMenuX-"] = Half(3, '-'),
+            ["Starship.TargetingMenuY+"] = Half(4, '-'), ["Starship.TargetingMenuY-"] = Half(4, '+'),
+            ["Starship.CommMenu"] = B(9),                                           // shaft button
+            ["Starship.CommMenuSelect"] = B(1),
+            ["Starship.CommMenuX+"] = Half(3, '+'), ["Starship.CommMenuX-"] = Half(3, '-'),
+            ["Starship.CommMenuY+"] = Half(4, '-'), ["Starship.CommMenuY-"] = Half(4, '+'),
+            ["Starship.FireCountermeasure"] = B(10),                                // pinkie lever
+            ["Starship.FreeLook"] = B(6),                                           // D-pad south, held: the stick turns the camera
+            ["Starship.CameraPitch+"] = Half(1, '+'), ["Starship.CameraPitch-"] = Half(1, '-'),
+            ["Starship.CameraYaw+"] = Half(0, '-'), ["Starship.CameraYaw-"] = Half(0, '+'),  // camera yaw's positive half is left
+            ["Starship.Scoreboard"] = B(32),                                        // base button: show loadout
+        }, Replaces: true, IfFree: new[] { "Starship.Yaw+", "Starship.Yaw-" }),
+        new Preset("Flightdeck Throttle – Squadrons", "squadrons", FlightdeckThrottle, "Flightdeck Throttle", new Dictionary<string, InputRef>
+        {
+            ["Starship.Throttle+"] = Half(0, '+'), ["Starship.Throttle-"] = Half(0, '-'), // left lever (its X rises going forward)
+            ["Starship.Afterburner"] = B(4),                                         // thumb button: boost (hold: drift)
+            ["Starship.TargetCycle"] = B(2),                                         // thumb button: cycle targets (hold: target my attacker)
+            ["Starship.Communication"] = B(3),                                       // thumb button: ping (double-tap: acknowledge, hold: comms wheel)
+        }, Replaces: true),
+        new Preset("VelocityOne Rudder – Squadrons yaw", "squadrons", VelocityOneRudder, "VelocityOne Rudder", new Dictionary<string, InputRef>
+        {
+            ["Starship.Yaw+"] = Half(2, '+'), ["Starship.Yaw-"] = Half(2, '-'),     // Yaw Right = Z-AXIS BWD (flown on 2026-11-14)
+        }, Replaces: true),
     };
 }
 
@@ -71,6 +139,9 @@ public static class ProfileStore
 {
     static readonly string Dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "HotasBridge");
     static readonly JsonSerializerOptions Opts = new() { WriteIndented = true, Converters = { new JsonStringEnumConverter() } };
+
+    /// <summary>Whether bindings have ever been saved for this game (if not, LoadGame imports what the game's file has).</summary>
+    public static bool Exists(string gameId) => File.Exists(Path.Combine(Dir, gameId + ".json"));
 
     public static GameProfile Load(string gameId)
     {
