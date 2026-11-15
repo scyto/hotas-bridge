@@ -119,7 +119,7 @@ public sealed class Ac7Adapter : IGameAdapter, ITypedBindings
         if (Unsupported(i) != null) return null;
         return i.Kind switch
         {
-            InputKind.Axis => InputRef.AxisNames[i.Index] + (i.Invert ? ":R" : ""),
+            InputKind.Axis => InputRef.AxisNames[i.Index] + (i.Direction == '+' ? ":P" : i.Direction == '-' ? ":N" : "") + (i.Invert ? ":R" : ""),
             InputKind.Button => $"Button{i.Index + 1}",
             InputKind.Pov => $"POV_{i.Direction}{i.Index + 1}",
             _ => null
@@ -218,6 +218,10 @@ public sealed class Ac7Adapter : IGameAdapter, ITypedBindings
 
     string ReadCurrent() => File.Exists(ConfigPath) ? File.ReadAllText(ConfigPath) : "";
 
+    public string? DeviceNote(DeviceInfo device) =>
+        KnownDevices().ContainsKey(device.ProductGuid) ? null : "Not in the game's config yet. A section will be created on install.";
+
+    /// <summary>Devices Input.ini already has a section for (product GUID → ProductName).</summary>
     public IReadOnlyDictionary<Guid, string> KnownDevices()
     {
         var d = new Dictionary<Guid, string>();
