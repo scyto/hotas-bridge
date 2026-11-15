@@ -3,7 +3,7 @@
 Map any DirectInput stick, throttle or pedals to a game's own binding file, and write it safely. It reads devices the same way the game does, using DirectInput.
 
 ## Build
-Double-click `build.cmd` (needs the .NET 8 SDK). The exe ends up in `out\HotasBridge.exe`. If the build fails, the full output is in `build.log`.
+Double-click `build.cmd` (needs the .NET 10 SDK; running the exe needs the .NET 10 Desktop Runtime). The exe ends up in `out\HotasBridge.exe`. If the build fails, the full output is in `build.log`.
 
 ## Use
 1. Pick the game (only Ace Combat 7 for now).

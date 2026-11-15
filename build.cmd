@@ -1,5 +1,5 @@
 @echo off
-rem Builds HotasBridge.exe into .\out (needs the .NET 8 SDK). Full log goes to build.log.
+rem Builds HotasBridge.exe into .\out (needs the .NET 10 SDK). Full log goes to build.log.
 cd /d "%~dp0"
 echo Building HOTAS Bridge...
 dotnet publish HotasBridge.csproj -c Release -o out > build.log 2>&1

@@ -1,9 +1,10 @@
 # HOTAS Bridge: notes for Claude
 
-Windows app (.NET 8 WinForms + Vortice.DirectInput) that maps HOTAS inputs into games' own binding files. Started with Ace Combat 7.
+Windows app (.NET 10 WinForms + Vortice.DirectInput) that maps HOTAS inputs into games' own binding files. Started with Ace Combat 7.
 
 ## Build / run
 - `build.cmd` or `dotnet publish HotasBridge.csproj -c Release -o out` (Windows only; DirectInput).
+- Targets .NET 10 (`net10.0-windows`, framework-dependent, so users need the .NET 10 Desktop Runtime). .NET 10's WinForms analyzer makes WFO1000 an error: public properties on custom controls need `[DesignerSerializationVisibility(Hidden)]` (see `DeviceView`), since nothing here uses the designer.
 - Bindings persist in `%APPDATA%\HotasBridge\<game>.json`.
 
 ## Architecture
