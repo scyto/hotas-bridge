@@ -187,7 +187,7 @@ sealed class MainForm : Form, IControlsHost
                                                       ToolTipText = "What the bound control is on the device (from the maker's guide)" });
         g.Columns.Add(new DataGridViewTextBoxColumn { Name = "Input", HeaderText = "Binding", FillWeight = 15, DefaultCellStyle = { Font = Theme.Mono },
                                                       ToolTipText = "Editable: type the game's syntax, e.g. Button3, POV_U1, Y:R" });
-        g.Columns.Add(new DataGridViewTextBoxColumn { Name = "Key", HeaderText = "INI file", ReadOnly = true, FillWeight = 20, DefaultCellStyle = { Font = Theme.Mono, ForeColor = Theme.Dim },
+        g.Columns.Add(new DataGridViewTextBoxColumn { Name = "Key", HeaderText = "In file", ReadOnly = true, FillWeight = 20, DefaultCellStyle = { Font = Theme.Mono, ForeColor = Theme.Dim },
                                                       ToolTipText = "The setting's name in the game's file (n/a: HOTAS Bridge handles it itself)" });
         g.Columns.Add(new DataGridViewButtonColumn { Name = "Detect", HeaderText = "Detect", ToolTipText = "Click, then press a button, push a hat or move an axis to bind it", UseColumnTextForButtonValue = false, FillWeight = 9, FlatStyle = FlatStyle.Flat });
         g.Columns.Add(new DataGridViewButtonColumn { Name = "Inv", HeaderText = "Invert", ToolTipText = "Flip an axis's direction (AC7 writes it as :R)", FillWeight = 7, FlatStyle = FlatStyle.Flat });
@@ -218,6 +218,8 @@ sealed class MainForm : Form, IControlsHost
     {
         if (_controlsMode) { _controls.UpdateView(); return; } // the hidden grid is rebuilt when it's shown again
         _grid.Rows.Clear();
+        bool editable = TabActions().Any(a => !Locked(a)); // a read-only game's tabs: no edit columns, more room for the rest
+        foreach (var col in new[] { "Detect", "Inv", "Shape", "Clear" }) _grid.Columns[col]!.Visible = editable;
         DataGridViewRow? previous = null;
         foreach (var a in TabActions())
         {
@@ -274,6 +276,9 @@ sealed class MainForm : Form, IControlsHost
                 if (shaped) sc.Style = new DataGridViewCellStyle(sc.InheritedStyle) { ForeColor = Theme.Amber, Font = Theme.UiBold };
             }
             if (b == null) gr.Cells["Clear"] = new DataGridViewTextBoxCell { Value = "" }; // nothing to clear
+            if (Locked(a)) // shows the game's file; nothing to edit yet
+                foreach (var col in new[] { "Detect", "Inv", "Shape", "Clear" })
+                    gr.Cells[col] = new DataGridViewTextBoxCell { Value = "", ToolTipText = _adapter.ReadOnlyReason };
         }
     }
 
@@ -357,10 +362,11 @@ sealed class MainForm : Form, IControlsHost
     int IControlsHost.HatCount(LiveDevice d) => Math.Min(d.State.PovCount, Presets.PhysicalHats.TryGetValue(d.Info.ProductGuid, out var n) ? n : 4);
     string? IControlsHost.CanAssign(GameAction a, LiveDevice d, InputRef input) =>
         AppHandled(a) ? (input.Kind == InputKind.Button ? null : "System buttons and keyboard functions go on buttons.")
-                      : _adapter.UnsupportedDevice(d.Info.DeviceType, d.Info.ProductName) ?? _adapter.Unsupported(input);
+                      : _adapter.ReadOnlyReason ?? _adapter.UnsupportedDevice(d.Info.DeviceType, d.Info.ProductName) ?? _adapter.Unsupported(input);
 
     void IControlsHost.Assign(GameAction a, LiveDevice d, InputRef input, string controlLabel, GameAction? replaced)
     {
+        if (Locked(a) || (replaced != null && Locked(replaced))) { SetStatus(_adapter.ReadOnlyReason!, true); return; }
         var old = ((IControlsHost)this).BindingFor(a);
         if (replaced != null && replaced != a) RemoveBinding(replaced);
         if (a.Group == SystemButtons.Group)
@@ -380,17 +386,20 @@ sealed class MainForm : Form, IControlsHost
 
     void IControlsHost.Unassign(GameAction a, string controlLabel)
     {
+        if (Locked(a)) { SetStatus(_adapter.ReadOnlyReason!, true); return; }
         RemoveBinding(a); RefreshGrid();
         SetStatus($"{a.Description} is no longer on {controlLabel}; it's unbound now.");
     }
 
     void IControlsHost.SetInvert(GameAction a, bool invert)
     {
+        if (Locked(a)) { SetStatus(_adapter.ReadOnlyReason!, true); return; }
         if (!_profile.Bindings.TryGetValue(a.Key, out var b) || b.Input is not { Kind: InputKind.Axis } i) return;
         b.Input = i with { Invert = invert }; b.Raw = null; SaveProfile(); RefreshGrid();
     }
 
     void IControlsHost.Status(string text, bool error) => SetStatus(text, error);
+    string? IControlsHost.Locked => TabActions().Any(a => !Locked(a)) ? null : _adapter.ReadOnlyReason;
 
     void RemoveBinding(GameAction a)
     {
@@ -417,7 +426,7 @@ sealed class MainForm : Form, IControlsHost
 
     void Grid_CellContentClick(object? sender, DataGridViewCellEventArgs e)
     {
-        if (e.RowIndex < 0 || _grid.Rows[e.RowIndex].Tag is not GameAction a) return;
+        if (e.RowIndex < 0 || _grid.Rows[e.RowIndex].Tag is not GameAction a || Locked(a)) return;
         var col = _grid.Columns[e.ColumnIndex].Name;
         if (col == "Detect")
         {
@@ -594,7 +603,6 @@ sealed class MainForm : Form, IControlsHost
             _devices.Controls.Add(new Label { Text = "No game controllers found. Plug them in and click Rescan devices.", AutoSize = true, ForeColor = Theme.Dim });
         else
         {
-            var known = SafeKnown();
             foreach (var d in _di.Devices)
             {
                 bool xinput = d.Info.IsXInput; // the game reads it through XInput: its DirectInput type is irrelevant
@@ -606,7 +614,7 @@ sealed class MainForm : Form, IControlsHost
                 if (xinput) v.Note = "Xbox controller: games read it directly (XInput). Nothing to set up here.";
                 else if (d.Info.IsVJoy) v.Note = "HOTAS Bridge's virtual joystick: shaped axes are sent here. Not for binding.";
                 else if (ignored) v.Note = $"{GameShortName} ignores {d.Info.DeviceType} devices. Click {d.Info.DeviceType} ▾ to change it.";
-                else if (!known.ContainsKey(d.Info.ProductGuid)) v.Note = "Not in the game's config yet. A section will be created on install.";
+                else if (SafeNote(d.Info) is { } note) v.Note = note;
                 v.TypeClicked += (_, _) => ShowTypeMenu(v);
                 _devices.Controls.Add(v);
             }
@@ -614,9 +622,13 @@ sealed class MainForm : Form, IControlsHost
         _devices.ResumeLayout();
     }
 
-    IReadOnlyDictionary<Guid, string> SafeKnown() { try { return _adapter.KnownDevices(); } catch { return new Dictionary<Guid, string>(); } }
+    string? SafeNote(DeviceInfo d) { try { return _adapter.DeviceNote(d); } catch { return null; } }
 
-    string GameShortName => _adapter.Name.Split(':')[0];
+    string GameShortName => _adapter.ShortName;
+
+    /// <summary>The game's file is shown, not edited (IGameAdapter.ReadOnlyReason); system buttons and keyboard functions are
+    /// HOTAS Bridge's own, so they stay editable.</summary>
+    bool Locked(GameAction a) => _adapter.ReadOnlyReason != null && !AppHandled(a);
 
     // ---------- device type (what the device reports to games) ----------
     void ShowTypeMenu(DeviceView v)
@@ -666,6 +678,7 @@ sealed class MainForm : Form, IControlsHost
     // ---------- does the game's file match the bindings? ----------
     void UpdateSync()
     {
+        if (_adapter.ReadOnlyReason is { } readOnly) { UpdateSyncReadOnly(readOnly); return; }
         string text; Color color; string tip;
         IReadOnlyList<string> diffs;
         try { diffs = _profile.Bindings.Count == 0 ? Array.Empty<string>() : _adapter.Differences(ForFile()); }
@@ -681,9 +694,27 @@ sealed class MainForm : Form, IControlsHost
             text = $"● {diffs.Count} change{(diffs.Count == 1 ? "" : "s")} not written yet: " +
                    (GameRunning ? $"close {GameShortName}, then Back up & overwrite" : "click Back up & overwrite");
             color = Theme.Amber;
-            tip = $"What Back up & overwrite would change in {Path.GetFileName(_adapter.ConfigPath)}:\n" +
-                  string.Join("\n", diffs.Take(25)) + (diffs.Count > 25 ? $"\n… and {diffs.Count - 25} more" : "");
+            tip = $"What Back up & overwrite would change in {Path.GetFileName(_adapter.ConfigPath)}:\n" + DiffList(diffs);
         }
+        SetSync(text, color, tip);
+    }
+
+    /// <summary>A read-only game: the grid is its file (reloaded when it changes); Differences lists what the grid can't show.</summary>
+    void UpdateSyncReadOnly(string readOnly)
+    {
+        ReloadIfFileChanged();
+        IReadOnlyList<string> diffs;
+        try { diffs = _adapter.Differences(_profile); } catch { return; }
+        var name = Path.GetFileName(_adapter.ConfigPath);
+        SetSync($"Read-only: the grid shows {name}" + (diffs.Count == 0 ? "" : $" · ⚠ {diffs.Count} problem{(diffs.Count == 1 ? "" : "s")} found (hover)"),
+                diffs.Count == 0 ? Theme.Dim : Theme.Amber,
+                readOnly + (diffs.Count == 0 ? "" : $"\n\nWhat HOTAS Bridge will change once it can write {name}:\n" + DiffList(diffs)));
+    }
+
+    static string DiffList(IReadOnlyList<string> diffs) => string.Join("\n", diffs.Take(25)) + (diffs.Count > 25 ? $"\n… and {diffs.Count - 25} more" : "");
+
+    void SetSync(string text, Color color, string tip)
+    {
         if (_sync.Text != text) _sync.Text = text;
         _sync.ForeColor = color;
         if (_tip.GetToolTip(_sync) != tip) _tip.SetToolTip(_sync, tip);
@@ -962,17 +993,68 @@ sealed class MainForm : Form, IControlsHost
     // ---------- game / presets / install ----------
     void LoadGame()
     {
-        _profile = ProfileStore.Load(_adapter.Id);
-        if (BindingUpgrade.Apply(_adapter, _profile)) SaveProfile(); // hats as axes used to be stored as AC7 text
+        _listenKey = null;
+        string? problem = null;
+        if (_adapter.ReadOnlyReason != null) { _profile = new GameProfile { GameId = _adapter.Id }; problem = LoadFromFile(); } // the grid shows the game's file
+        else
+        {
+            _profile = ProfileStore.Load(_adapter.Id);
+            if (BindingUpgrade.Apply(_adapter, _profile)) SaveProfile(); // hats as axes used to be stored as AC7 text
+        }
         SyncBindingTypes(); // older profiles have no device type, and a device's type can be changed
         _path.Text = _adapter.ConfigPath + (File.Exists(_adapter.ConfigPath) ? "" : "   (not found: run the game once with your devices connected)");
         RebuildTabs(); RefreshGrid(); RebuildDevices(); UpdateSync();
-        SetStatus($"{_adapter.Name}: {_profile.Bindings.Count} bindings loaded.");
+        if (problem != null) SetStatus(problem, true);
+        else if (_adapter.ReadOnlyReason != null) SetStatus($"{_adapter.Name}: showing the {_profile.Bindings.Count} joystick bindings in its file (read-only for now).");
+        else SetStatus($"{_adapter.Name}: {_profile.Bindings.Count} bindings loaded.");
+    }
+
+    DateTime _fileStamp; // the game's file when it was last read (read-only games)
+
+    /// <summary>For a read-only game: the bindings are whatever its file has now. Returns why it couldn't be read, or null.</summary>
+    string? LoadFromFile()
+    {
+        var path = _adapter.ConfigPath;
+        var stamp = File.Exists(path) ? File.GetLastWriteTimeUtc(path) : default;
+        var p = new GameProfile { GameId = _adapter.Id };
+        string? problem = null;
+        try { if (stamp != default) p.Bindings = _adapter.ReadBindings(path); }
+        catch (IOException ex) { return $"Couldn't read {Path.GetFileName(path)} ({ex.Message}); trying again."; } // e.g. locked: keep what's shown, retry
+        catch (Exception ex) { problem = $"Couldn't read {Path.GetFileName(path)}: {ex.Message}"; } // e.g. an old file format: wait for it to change
+        FillDevices(p.Bindings);
+        _profile = p; _fileStamp = stamp;
+        return problem;
+    }
+
+    /// <summary>A read-only game's file changed (Squadrons saves it when you leave its Controls menus): show it again, once
+    /// it has been still for a second, so a half-written file isn't read.</summary>
+    void ReloadIfFileChanged()
+    {
+        var path = _adapter.ConfigPath;
+        var stamp = File.Exists(path) ? File.GetLastWriteTimeUtc(path) : default;
+        if (stamp == _fileStamp || (stamp != default && DateTime.UtcNow - stamp < TimeSpan.FromSeconds(1))) return;
+        var problem = LoadFromFile();
+        SyncBindingTypes(); RefreshGrid(); RebuildDevices();
+        SetStatus(problem ?? $"{Path.GetFileName(path)} changed; the grid shows it now ({_profile.Bindings.Count} joystick bindings).", problem != null);
+    }
+
+    /// <summary>Bindings read from a file have the device's product GUID (AC7) or its name (Squadrons): fill in the other from the
+    /// connected devices.</summary>
+    void FillDevices(Dictionary<string, Binding> bindings)
+    {
+        foreach (var b in bindings.Values)
+        {
+            if (b.DeviceProduct == Guid.Empty && b.DeviceName.Length > 0)
+                b.DeviceProduct = _di?.Devices.FirstOrDefault(d => d.Info.ProductName == b.DeviceName)?.Info.ProductGuid ?? Guid.Empty;
+            else if (b.DeviceName.Length == 0) // no ProductName line: name it from the device
+                b.DeviceName = _di?.Devices.FirstOrDefault(d => d.Info.ProductGuid == b.DeviceProduct)?.Info.ProductName ?? "Unknown device";
+        }
     }
 
     void SaveProfile()
     {
-        try { ProfileStore.Save(_profile); } catch (Exception ex) { SetStatus("Couldn't save profile: " + ex.Message, true); }
+        if (_adapter.ReadOnlyReason == null) // a read-only game's bindings are its file: nothing of ours to save
+            try { ProfileStore.Save(_profile); } catch (Exception ex) { SetStatus("Couldn't save profile: " + ex.Message, true); }
         UpdateSync();
     }
 
@@ -1004,6 +1086,7 @@ sealed class MainForm : Form, IControlsHost
     void BuildRestoreMenu(ContextMenuStrip m)
     {
         m.Items.Clear();
+        if (_adapter.ReadOnlyReason != null) { m.Items.Add(new ToolStripMenuItem("Nothing to restore: HOTAS Bridge only reads this game's file so far") { Enabled = false }); return; }
         var list = _adapter.Backups();
         foreach (var f in list.Take(15))
         {
@@ -1022,8 +1105,7 @@ sealed class MainForm : Form, IControlsHost
                     foreach (var ka in _adapter.KeyActions) // not in the game's file: keep them
                         if (_profile.Bindings.TryGetValue(ka.Key, out var kept)) restored[ka.Key] = kept;
                     _profile.Bindings = restored;
-                    foreach (var b in restored.Values.Where(b => b.DeviceName.Length == 0)) // no ProductName line: name it from the device
-                        b.DeviceName = _di?.Devices.FirstOrDefault(d => d.Info.ProductGuid == b.DeviceProduct)?.Info.ProductName ?? "Unknown device";
+                    FillDevices(restored);
                     SyncBindingTypes(); SaveProfile(); RefreshGrid(); RebuildDevices(); UpdateSync();
                     SetStatus($"Restored {Path.GetFileName(f)} and its {restored.Count} bindings." +
                               (profileBackup.Length > 0 ? $" Your previous bindings are saved as {profileBackup}." : ""));
@@ -1037,6 +1119,7 @@ sealed class MainForm : Form, IControlsHost
 
     void Install()
     {
+        if (_adapter.ReadOnlyReason is { } readOnly) { SetStatus(readOnly, true); return; }
         if (_profile.Bindings.Count == 0) { SetStatus("Nothing to install yet. Detect some bindings or load a preset.", true); return; }
         if (GameRunning &&
             MessageBox.Show(this, $"{_adapter.Name} is running.\n\nIt rewrites {Path.GetFileName(_adapter.ConfigPath)} when it exits, from the copy it loaded at startup, " +

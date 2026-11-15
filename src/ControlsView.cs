@@ -23,6 +23,8 @@ interface IControlsHost
     void Unassign(GameAction a, string controlLabel);
     void SetInvert(GameAction a, bool invert);
     void Status(string text, bool error);
+    /// <summary>Why the current tab can't be edited (a game HOTAS Bridge only reads so far), or null.</summary>
+    string? Locked { get; }
 }
 
 /// <summary>
@@ -46,6 +48,7 @@ sealed class ControlsView : Panel
     readonly List<(string Title, List<Row> Rows)> _groups = new();
     readonly List<(string Title, Rectangle Rect)> _titles = new();
     List<GameAction> _actions = new();
+    string? _locked; // IControlsHost.Locked, as of the last refresh: every row read-only
     LiveDevice? _dev;
     Guid _device;
     string _builtFor = "", _pickFor = "";
@@ -163,6 +166,7 @@ sealed class ControlsView : Panel
     /// <summary>Works out each control's current binding(s), and the unbound actions, and repaints.</summary>
     void RefreshValues()
     {
+        _locked = _host.Locked;
         foreach (var row in _rows)
         {
             var product = row.Dev.Info.ProductGuid;
@@ -176,9 +180,9 @@ sealed class ControlsView : Panel
             var inText = token == null ? new List<GameAction>() : _actions.Where(a => _host.BindingFor(a) is { Raw: { } raw } b && b.DeviceProduct == product
                 && System.Text.RegularExpressions.Regex.IsMatch(raw, $@"(?<![A-Za-z0-9_]){System.Text.RegularExpressions.Regex.Escape(token)}(?![0-9])")).ToList();
             inText.AddRange(hatAxes);
-            bool readOnly = inText.Count > 0 || onThis.Count > 1;
+            bool readOnly = _locked != null || inText.Count > 0 || onThis.Count > 1;
             row.Current = readOnly ? null : onThis.FirstOrDefault();
-            row.ReadOnlyText = readOnly ? string.Join(" + ", onThis.Concat(inText).Select(a => a.Description).Distinct()) : null;
+            row.ReadOnlyText = !readOnly ? null : onThis.Count + inText.Count == 0 ? "—" : string.Join(" + ", onThis.Concat(inText).Select(a => a.Description).Distinct());
             row.Inverted = row.Current != null && _host.BindingFor(row.Current)?.Input is { Invert: true };
         }
         var unbound = _actions.Where(a => _host.BindingFor(a) == null).Select(a => a.Description).ToList();
@@ -288,8 +292,8 @@ sealed class ControlsView : Panel
             var box = _canvas.ToClient(row.Box);
             if (row.ReadOnlyText != null)
             {
-                TextRenderer.DrawText(g, row.ReadOnlyText, _ui, box, Theme.Text, Flags);
-                TextRenderer.DrawText(g, "edit in grid", _ui, _canvas.ToClient(row.Extra), Theme.Dim, Flags);
+                TextRenderer.DrawText(g, row.ReadOnlyText, _ui, box, row.ReadOnlyText == "—" ? Theme.Dim : Theme.Text, Flags);
+                if (_locked == null) TextRenderer.DrawText(g, "edit in grid", _ui, _canvas.ToClient(row.Extra), Theme.Dim, Flags);
                 continue;
             }
             bool hot = row == _hot && _hotPart == Part.Box;
@@ -340,7 +344,7 @@ sealed class ControlsView : Panel
         if (otherRow) _tip.SetToolTip(_canvas, _hot == null ? null : TipFor(_hot));
     }
 
-    static string? TipFor(Row r) => r.ReadOnlyText is { } t ? $"{t}: a typed binding, a hat used as an axis, or several actions use this control. Edit it in the grid." : null;
+    string? TipFor(Row r) => r.ReadOnlyText is not { } t ? null : _locked ?? $"{t}: a typed binding, a hat used as an axis, or several actions use this control. Edit it in the grid.";
 
     void Press((Row? row, Part part) h)
     {

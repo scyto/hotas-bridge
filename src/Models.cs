@@ -5,18 +5,19 @@ namespace HotasBridge;
 /// <summary>What kind of physical input a binding refers to.</summary>
 public enum InputKind { Axis, Button, Pov }
 
-/// <summary>Neutral reference to a physical input, independent of any game's syntax.</summary>
+/// <summary>Neutral reference to a physical input, independent of any game's syntax. Direction: a hat's 'U' 'D' 'L' 'R'; for an
+/// axis, '\0' is the whole axis and '+' / '-' one half of it (games that bind halves separately, e.g. Squadrons' Pitch Up).</summary>
 public sealed record InputRef(InputKind Kind, int Index, char Direction = '\0', bool Invert = false)
 {
     // Axis index: 0 X, 1 Y, 2 Z, 3 Rx, 4 Ry, 5 Rz, 6 Slider0, 7 Slider1
     public static readonly string[] AxisNames = { "X", "Y", "Z", "Rx", "Ry", "Rz", "Slider1", "Slider2" };
 
-    /// <summary>The opposite hat direction ('U' ↔ 'D', 'L' ↔ 'R').</summary>
-    public static char OppositeDir(char d) => d switch { 'U' => 'D', 'D' => 'U', 'L' => 'R', 'R' => 'L', _ => d };
+    /// <summary>The opposite hat direction ('U' ↔ 'D', 'L' ↔ 'R') or axis half ('+' ↔ '-').</summary>
+    public static char OppositeDir(char d) => d switch { 'U' => 'D', 'D' => 'U', 'L' => 'R', 'R' => 'L', '+' => '-', '-' => '+', _ => d };
 
     public override string ToString() => Kind switch
     {
-        InputKind.Axis => AxisNames[Index] + (Invert ? " (inv)" : ""),
+        InputKind.Axis => AxisNames[Index] + (Direction is '+' or '-' ? Direction.ToString() : "") + (Invert ? " (inv)" : ""),
         InputKind.Button => $"Button {Index + 1}",
         InputKind.Pov => $"Hat {Index + 1} {Direction}",
         _ => "?"
@@ -58,7 +59,7 @@ public sealed class Binding
     public int VJoyAxis { get; set; }
     /// <summary>Whether this binding is shaped and can be (a plain axis).</summary>
     [System.Text.Json.Serialization.JsonIgnore]
-    public bool IsShaped => Shape != null && Raw == null && Input is { Kind: InputKind.Axis };
+    public bool IsShaped => Shape != null && Raw == null && Input is { Kind: InputKind.Axis, Direction: '\0' };
 }
 
 public enum ActionKind { Axis, Button }

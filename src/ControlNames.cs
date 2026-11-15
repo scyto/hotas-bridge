@@ -67,7 +67,8 @@ public static class ControlNames
             InputKind.Axis when input.Index >= 0 && input.Index < InputRef.AxisNames.Length => InputRef.AxisNames[input.Index],
             _ => null
         };
-        if (key != null && ByDevice.TryGetValue(product, out var names) && names.TryGetValue(key, out var n)) return n;
+        if (key != null && ByDevice.TryGetValue(product, out var names) && names.TryGetValue(key, out var n))
+            return input.Kind == InputKind.Axis && input.Direction is '+' or '-' ? $"{n} {(input.Direction == '+' ? "+" : "−")}" : n; // half an axis
         return input.Kind == InputKind.Pov
             ? $"Hat {input.Index + 1} " + input.Direction switch { 'U' => "up", 'D' => "down", 'L' => "left", 'R' => "right", _ => "" }
             : null;

@@ -9,9 +9,14 @@ public interface IGameAdapter
 {
     string Id { get; }
     string Name { get; }
+    /// <summary>The name in messages ("Ace Combat 7", "Squadrons").</summary>
+    string ShortName => Name.Split(':')[0];
     /// <summary>Process name without .exe, used to warn if the game is running.</summary>
     string? ProcessName { get; }
     string ConfigPath { get; }
+    /// <summary>Why HOTAS Bridge can only show this game's bindings so far, or null when it can write them. While set, the grid
+    /// shows what's in the game's file (ReadBindings) and follows it when the file changes; editing, Install and Restore are off.</summary>
+    string? ReadOnlyReason => null;
     IReadOnlyList<GameAction> Actions { get; }
     /// <summary>Functions the game only offers on the keyboard (no setting in its file). HOTAS Bridge presses their keys
     /// (GameAction.Keys) while the bound button is held and the game is in front.</summary>
@@ -35,8 +40,9 @@ public interface IGameAdapter
     /// back to match the restored file.</summary>
     Dictionary<string, Binding> ReadBindings(string path);
 
-    /// <summary>Devices the game's own config already knows about (product GUID → name).</summary>
-    IReadOnlyDictionary<Guid, string> KnownDevices();
+    /// <summary>What the game's file says about a connected device, for its card ("Not in the game's config yet",
+    /// "Squadrons: Flight Stick 2"), or null.</summary>
+    string? DeviceNote(DeviceInfo device);
 
     /// <summary>What Install would change in the game's file right now, one line per setting; empty when the file already
     /// matches the profile. Compares values, not text, so a game rewriting the file in its own layout isn't a change.</summary>
@@ -84,5 +90,5 @@ public static class BindingUpgrade
 
 public static class GameRegistry
 {
-    public static readonly IReadOnlyList<IGameAdapter> All = new IGameAdapter[] { new Ac7Adapter() };
+    public static readonly IReadOnlyList<IGameAdapter> All = new IGameAdapter[] { new Ac7Adapter(), new SquadronsAdapter() };
 }

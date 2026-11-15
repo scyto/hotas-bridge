@@ -160,6 +160,13 @@ On foot in the hangar the camera turns by itself. Cause: the hidden factory slot
 ## Start-up crash on high-thread CPUs
 On this PC (i9-13900K, 32 threads; Windows build 26340) every launch died 5–31 s in with 0xC0000005 and no window. The game's own report (`xcpt TRON <date>.txt/.mdmp` in the install folder) puts it in C++ static initialisation, before settings or input. Limiting the game to 16 threads fixes it: Steam launch option `cmd /c start "" /affinity FFFF %command%` (logical CPUs 0–15 = the P-core threads). Steam forums report the same in 2026. Expect about 70–150 s with no window after the launcher exits; Steam briefly shows the game as stopped when `cmd` exits, then picks the game process up again.
 
+## In HOTAS Bridge (`src/SquadronsAdapter.cs`)
+Read-only so far: the grid shows the file and follows it when the game saves it; nothing is written.
+- One grid row per menu row: a button concept is one row (key `Starship.Fire`), an axis concept two (`Starship.Pitch+` = the `negate 0` slot, `Starship.Pitch-` = `negate 1`). The row shows the first joystick slot of the concept (or of that half); every other bound joystick slot is a hidden binding, listed next to the file path and in Preview. Checked against the user's file: 141 rows, 90 bound, the same as an independent decode, and the 2024 backup's hidden hangar slot 11 (Rz− on Flight Stick 1) is found.
+- A control is an `InputRef`: a button, a hat direction, or half an axis (`Direction` `+` / `-`). Shown in the menu's words; the menu shows buttons as a bare number with the Flight Stick number in front for devices after the first ("2·4" = button 4 on Flight Stick 2), so the grid says "Button 4" and puts the device in its own column.
+- Bindings name the device by product name ("Flightdeck Stick 1" → "Flightdeck Stick"), and HOTAS Bridge matches it to a connected device by that name. A second device with the same name keeps its number ("VelocityOne Rudder 2").
+- Assumed, not checked in the game: which half is positive for Hangar Pitch (Up), Hangar Yaw (Right), Emote Wheel Up/Down (Up) and Spectator Roll (Right), and the slider codes and their wording. To check one, bind its first row (e.g. Hangar Pitch Up) in the game and see whether the `negate 0` or the `negate 1` slot changed.
+
 ## Sources
 - moff-wildfire/squadrons_config (2021, Python, code tables): https://github.com/moff-wildfire/squadrons_config
 - ScottyMac52/DCS-IPIA (2026, C#, factory records incl. the hidden hangar slots; slot behaviour notes): https://github.com/ScottyMac52/DCS-IPIA
