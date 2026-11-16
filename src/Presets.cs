@@ -111,8 +111,8 @@ public static class Presets
     static readonly Dictionary<string, InputRef> Ac7Throttle = new()
     {
         ["Flight_Throttle"] = A(0, true),     // left lever: AC7 is faster at lower values, and the lever's X rises going forward
-        ["Flight_View"] = B(1),               // mini-stick click: camera toggle
-        ["Flight_CameraPitch"] = A(4), ["Flight_CameraYaw"] = A(3), // mini-stick, as the user has flown it since 2026-11-13
+        ["Flight_View"] = B(1),               // thumbstick click: camera toggle
+        ["Flight_CameraPitch"] = A(4), ["Flight_CameraYaw"] = A(3), // thumbstick up/down (Ry) and left/right (Rx), as the user flies it
     };
     static readonly Dictionary<string, InputRef> Ac7Pedals = new() { ["Flight_Yaw"] = A(2) }; // confirmed in-game once the rudder reports as Flight
     const string Ac7KeyboardThrottle = "The throttle stays on the keyboard: hold to speed up or slow down; letting go returns to cruise.";
