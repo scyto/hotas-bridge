@@ -28,12 +28,12 @@ public static class ControlNames
         },
         [Presets.FlightdeckThrottle] = new Dictionary<string, string>
         {
-            // X/Y and Rx/Ry measured (Rx is the mini-stick's forward/back and Ry its left/right: the reverse of the usual
-            // convention); Slider1 is the rear wheel in analog mode (buttons 40/41 in digital mode) and Slider2 the
-            // flaps lever, Z the upper dial's outer ring, Rz the thumb wheel around the mini-stick (user-confirmed).
-            ["X"] = "Left lever", ["Y"] = "Right lever", ["Rx"] = "Thumb mini-stick forward/back", ["Ry"] = "Thumb mini-stick left/right", ["Rz"] = "Thumb wheel",
+            // X/Y and Rx/Ry measured (the thumbstick, Hangar's TDC: Ry up -1 / down +1, Rx left -1 / right +1, user-measured
+            // 2026-11-15); Slider1 is the rear wheel in analog mode (buttons 40/41 in digital mode) and Slider2 the
+            // flaps lever, Z the upper dial's outer ring, Rz the thumb wheel around the thumbstick (user-confirmed).
+            ["X"] = "Left lever", ["Y"] = "Right lever", ["Rx"] = "Thumbstick left/right", ["Ry"] = "Thumbstick up/down", ["Rz"] = "Thumb wheel",
             ["Slider1"] = "Rear wheel (analog mode)", ["Slider2"] = "Flaps lever (axis)", ["Z"] = "Upper dial outer ring (analog mode)",
-            ["B1"] = "Thumb mini-stick click", ["B2"] = "Thumb button", ["B3"] = "Thumb button", ["B4"] = "Thumb button",
+            ["B1"] = "Thumbstick click", ["B2"] = "Thumb button", ["B3"] = "Thumb button", ["B4"] = "Thumb button",
             ["H1U"] = "Thumb (hat 1) up", ["H1R"] = "Thumb (hat 1) right", ["H1D"] = "Thumb (hat 1) down", ["H1L"] = "Thumb (hat 1) left",
             ["B18"] = "Fire suppression", ["B5"] = "Thumb lever up (stays on)", ["B6"] = "Thumb lever down (stays on)",
             ["B7"] = "Rear 4-way north", ["B8"] = "Rear 4-way east", ["B9"] = "Rear 4-way south", ["B10"] = "Rear 4-way west",

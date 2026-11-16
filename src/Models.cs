@@ -83,13 +83,15 @@ public sealed record GameAction(string Key, string Group, string Description, Ac
 /// <summary>Menu roles, for driving the Xbox Game Bar (which takes Xbox controller, mouse or keyboard input, not a joystick).</summary>
 public enum MenuNav { Up, Down, Left, Right, Confirm, Back, Prev, Next }
 
-/// <summary>A preset: bindings for one device model (by product GUID) in one game, plus optionally its system buttons
-/// (Guide, Share: see SystemButtons), keyed by action key.</summary>
-/// <param name="Replaces">Loading it also unbinds whatever else this device does in the tabs the preset covers, so the device
-/// ends up exactly as the preset says (Squadrons). Without it, only the preset's own actions change (AC7).</param>
-/// <param name="IfFree">Actions set only when they aren't bound on another device (yaw on stick twist, unless pedals have it).</param>
-public sealed record Preset(string Name, string GameId, Guid DeviceProduct, string DeviceName, IReadOnlyDictionary<string, InputRef> Map,
-                            IReadOnlyDictionary<string, InputRef>? System = null, bool Replaces = false, IReadOnlyCollection<string>? IfFree = null);
+/// <summary>What one device model (by product GUID) does in a setup, keyed by action key, plus optionally its system buttons
+/// (Guide, Share: see SystemButtons).</summary>
+public sealed record DeviceMap(Guid Product, string DeviceName, IReadOnlyDictionary<string, InputRef> Map, IReadOnlyDictionary<string, InputRef>? System = null);
+
+/// <summary>A setup: what each device of one combination (e.g. stick + throttle + rudder) does in one game. Loading it replaces
+/// what the game's setup devices do on the tabs it covers, so a device the setup leaves out loses its bindings there.</summary>
+/// <param name="Tip">One line on the layout, for the menu.</param>
+/// <param name="Note">Said after loading it: a game setting it needs (Squadrons' stepped throttle).</param>
+public sealed record Setup(string Name, string GameId, IReadOnlyList<DeviceMap> Devices, string Tip, string? Note = null);
 
 public sealed class GameProfile
 {

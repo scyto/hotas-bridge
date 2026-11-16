@@ -21,7 +21,7 @@ sealed class MainForm : Form, IControlsHost
     readonly Label _title = new() { Text = "HOTAS BRIDGE", AutoSize = true, Font = Theme.Title, ForeColor = Theme.Amber, Margin = new Padding(0, 4, 16, 0) };
     readonly SplitContainer _split = new() { Dock = DockStyle.Fill, BackColor = Theme.Line, FixedPanel = FixedPanel.Panel1 };
     readonly StatusStrip _strip = new() { BackColor = Theme.Panel2, ForeColor = Theme.Text, SizingGrip = false, Font = Theme.Ui };
-    readonly ContextMenuStrip _presetMenu = new(), _restoreMenu = new(), _textMenu = new() { ShowCheckMargin = true, ShowImageMargin = false };
+    readonly ContextMenuStrip _setupMenu = new() { ShowCheckMargin = true, ShowImageMargin = false, ShowItemToolTips = true }, _restoreMenu = new(), _textMenu = new() { ShowCheckMargin = true, ShowImageMargin = false };
     Button _btnInstall = null!;
     DirectInputService? _di;
     RawHidInput? _raw; // buttons and hats while the Game Bar has paused DirectInput
@@ -32,6 +32,8 @@ sealed class MainForm : Form, IControlsHost
     // detect state
     string? _listenKey;
     Dictionary<Guid, (float[] axes, int[] pov, bool[] btn)> _baseline = new();
+    (Guid Device, int Button, long At)? _heldPress; // Detect on half an axis: a button press waiting to see if an axis moves (CheckListen)
+    const int PressWaitMs = 400;
 
     public MainForm(AppSettings settings)
     {
@@ -48,8 +50,8 @@ sealed class MainForm : Form, IControlsHost
         foreach (var g in GameRegistry.All) _game.Items.Add(g.Name);
         _game.SelectedIndex = 0;
         _game.SelectedIndexChanged += (_, _) => { _adapter = GameRegistry.All[_game.SelectedIndex]; LoadGame(); };
-        var btnPreset = MakeButton("Load preset ▾", false);
-        btnPreset.Click += (_, _) => { BuildPresetMenu(_presetMenu); ShowMenu(_presetMenu, btnPreset); };
+        var btnSetup = MakeButton("Load setup ▾", false);
+        btnSetup.Click += (_, _) => { BuildSetupMenu(_setupMenu); ShowMenu(_setupMenu, btnSetup); };
         _btnInstall = MakeButton("Back up && overwrite", true);
         _btnInstall.Click += (_, _) => Install();
         var btnRestore = MakeButton("Restore ▾", false);
@@ -62,7 +64,7 @@ sealed class MainForm : Form, IControlsHost
         btnRefresh.Click += (_, _) => { _di?.Refresh(); SyncBindingTypes(); RebuildDevices(); RefreshGrid(); };
         var btnText = MakeButton("Text size ▾", false);
         btnText.Click += (_, _) => { BuildTextMenu(); ShowMenu(_textMenu, btnText); };
-        top.Controls.AddRange(new Control[] { _title, _game, btnPreset, _btnInstall, btnRestore, btnPreview, btnFolder, btnRefresh, btnText });
+        top.Controls.AddRange(new Control[] { _title, _game, btnSetup, _btnInstall, btnRestore, btnPreview, btnFolder, btnRefresh, btnText });
 
         var pathBar = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(14, 0, 0, 4), BackColor = Theme.Bg, WrapContents = true };
         pathBar.Controls.Add(_path); pathBar.Controls.Add(_sync);
@@ -473,11 +475,12 @@ sealed class MainForm : Form, IControlsHost
     {
         _listenKey = key;
         _baseline = new();
+        _heldPress = null;
         if (_di != null) foreach (var d in _di.Devices) _baseline[d.Info.InstanceGuid] = Snap(d.State);
         var a = ActionFor(key);
         bool halves = _adapter.BindsAxisHalves;
         var what = AppHandled(a) ? "press a button" :
-                   halves && a.Pair != null ? "move an axis the way that should do this, or push a hat (the other direction goes on its partner row)" :
+                   halves && a.Pair != null ? "move an axis the way that should do this or push a hat (the other direction goes on its partner row), or press a button" :
                    a.Kind == ActionKind.Button ? (halves ? "press a button, push a hat or move an axis" : "press a button or push a hat")
                    : (a.Gesture ?? "move the axis you want") + ", or push a hat";
         SetStatus($"Listening for {key}: {what}. Click Press… or Esc to cancel.");
@@ -510,7 +513,8 @@ sealed class MainForm : Form, IControlsHost
             if (halves && action.Pair != null)
             {
                 // half of an axis action (Pitch Up): the half of the axis that moved, or a hat direction; the other row gets the
-                // opposite half. Axes and hats only, as on an axis row: a throttle presses detent buttons as its lever moves.
+                // opposite half. Or a button (Throttle Increase on a thumb wheel click), once it has waited PressWaitMs: a throttle
+                // presses detent buttons as its lever moves, and an axis that moves in the meantime wins.
                 for (int i = 0; i < 8; i++)
                     if (s.AxisPresent[i] && Math.Abs(s.Axes[i] - b.axes[i]) > 0.5f)
                     { if (BindHalf(d, action, new InputRef(InputKind.Axis, i, s.Axes[i] > b.axes[i] ? '+' : '-'))) return; b.axes[i] = s.Axes[i]; }
@@ -519,6 +523,14 @@ sealed class MainForm : Form, IControlsHost
                     char dir = DirectInputService.PovDir(s.Pov[h]);
                     if (dir != '\0' && b.pov[h] < 0) { if (BindHalf(d, action, new InputRef(InputKind.Pov, h, dir))) return; b.pov[h] = s.Pov[h]; }
                 }
+                if (_heldPress is { } held && held.Device == d.Info.InstanceGuid && Environment.TickCount64 - held.At >= PressWaitMs)
+                {
+                    _heldPress = null;
+                    if (Bind(d, new InputRef(InputKind.Button, held.Button))) return;
+                }
+                if (_heldPress == null)
+                    foreach (var i in s.Pressed.Concat(Enumerable.Range(0, s.ButtonCount).Where(i => s.Buttons[i] && !b.btn[i])))
+                        if (!b.btn[i]) { b.btn[i] = true; _heldPress = (d.Info.InstanceGuid, i, Environment.TickCount64); break; }
                 continue;
             }
             if (action.Kind == ActionKind.Axis)
@@ -1028,7 +1040,7 @@ sealed class MainForm : Form, IControlsHost
         try { _settings.Save(); } catch (Exception ex) { SetStatus("Couldn't save settings: " + ex.Message, true); }
     }
 
-    // ---------- game / presets / install ----------
+    // ---------- game / setups / install ----------
     void LoadGame()
     {
         _listenKey = null;
@@ -1119,31 +1131,50 @@ sealed class MainForm : Form, IControlsHost
         UpdateSync();
     }
 
-    void BuildPresetMenu(ContextMenuStrip m)
+    void BuildSetupMenu(ContextMenuStrip m)
     {
         m.Items.Clear();
-        foreach (var p in Presets.BuiltIn.Where(p => p.GameId == _adapter.Id))
+        var plugged = _di?.Devices.Where(d => !d.Info.IsVJoy).ToList() ?? new List<LiveDevice>();
+        var setups = Presets.Setups.Where(s => s.GameId == _adapter.Id).ToList();
+        var match = Presets.Matching(_adapter.Id, plugged.Select(d => d.Info.ProductGuid));
+        if (setups.Count > 0) m.Items.Add(new ToolStripMenuItem("VelocityOne Flightdeck Stick, Throttle and Rudder" + (match == null ? "" : " (✓ = what's plugged in)")) { Enabled = false });
+        foreach (var s in setups)
         {
-            var connected = _di?.Devices.FirstOrDefault(d => d.Info.ProductGuid == p.DeviceProduct);
-            var item = new ToolStripMenuItem(p.Name + (connected == null ? "  (device not connected)" : ""));
-            item.Click += (_, _) =>
-            {
-                _listenKey = null;
-                var (set, removed, kept) = Presets.Apply(p, _profile, GridActions, connected?.Info.ProductName ?? p.DeviceName, connected?.Info.DeviceType);
-                foreach (var (k, v) in p.System ?? new Dictionary<string, InputRef>())
-                    _settings.System[k] = new SystemBinding { DeviceProduct = p.DeviceProduct, DeviceName = connected?.Info.ProductName ?? p.DeviceName, Button = v.Index };
-                if (p.System is { Count: > 0 }) SaveSettings();
-                SaveProfile(); RefreshGrid();
-                var devWhy = connected == null ? null : _adapter.UnsupportedDevice(connected.Info.DeviceType, connected.Info.ProductName);
-                var sys = p.System is { Count: > 0 } ? ", " + string.Join(", ", p.System.Select(s => $"{s.Key} on Button{s.Value.Index + 1}")) : "";
-                SetStatus($"Loaded preset '{p.Name}' ({set} bindings{sys}" +
-                          (removed > 0 ? $"; {removed} other binding{(removed == 1 ? "" : "s")} on {p.DeviceName} removed" : "") +
-                          (kept > 0 ? $"; {kept} left on the device that already has {(kept == 1 ? "it" : "them")}" : "") + ")." +
-                          (devWhy == null ? "" : $" {devWhy} Click {connected!.Info.DeviceType} ▾ on its card to change it."), devWhy != null);
-            };
+            var missing = s.Devices.Where(d => plugged.All(p => p.Info.ProductGuid != d.Product)).Select(d => d.DeviceName).ToList();
+            var item = new ToolStripMenuItem(s.Name + (missing.Count > 0 ? $"  (not plugged in: {string.Join(", ", missing)})" : ""))
+                { Checked = s == match, ToolTipText = s.Tip };
+            item.Click += (_, _) => LoadSetup(s, plugged, missing);
             m.Items.Add(item);
         }
-        if (m.Items.Count == 0) m.Items.Add(new ToolStripMenuItem("No presets for this game yet") { Enabled = false });
+        if (setups.Count == 0) m.Items.Add(new ToolStripMenuItem("No setups for this game yet") { Enabled = false });
+    }
+
+    /// <summary>Loads a setup into the grid (Presets.Apply) and its system buttons into the app settings.</summary>
+    void LoadSetup(Setup s, List<LiveDevice> plugged, List<string> missing)
+    {
+        _listenKey = null;
+        string backup = "";
+        try { backup = ProfileStore.Backup(_adapter.Id); } catch (Exception ex) { SetStatus("Couldn't back up your bindings, so nothing was loaded: " + ex.Message, true); return; }
+        LiveDevice? Plugged(Guid product) => plugged.FirstOrDefault(d => d.Info.ProductGuid == product);
+        var (set, removed) = Presets.Apply(s, _profile, GridActions, product => Plugged(product) is { } d ? (d.Info.ProductName, d.Info.DeviceType) : null);
+        var sys = new List<string>();
+        foreach (var d in s.Devices)
+            foreach (var (k, v) in d.System ?? new Dictionary<string, InputRef>())
+            {
+                _settings.System[k] = new SystemBinding { DeviceProduct = d.Product, DeviceName = Plugged(d.Product)?.Info.ProductName ?? d.DeviceName, Button = v.Index };
+                sys.Add($"{k} on Button{v.Index + 1}");
+            }
+        if (sys.Count > 0) SaveSettings();
+        SaveProfile(); RefreshGrid();
+        // a device the game ignores as it reports now (AC7 and a rudder that reports as a gamepad)
+        var ignored = s.Devices.Select(d => Plugged(d.Product)).OfType<LiveDevice>()
+            .Select(d => (d, why: _adapter.UnsupportedDevice(d.Info.DeviceType, d.Info.ProductName))).FirstOrDefault(x => x.why != null);
+        SetStatus($"Loaded '{s.Name}': {set} bindings" + (sys.Count > 0 ? ", " + string.Join(", ", sys) : "") +
+                  (removed > 0 ? $"; {removed} other binding{(removed == 1 ? "" : "s")} removed" : "") + "." +
+                  (s.Note == null ? "" : " " + s.Note) +
+                  (missing.Count > 0 ? $" Not plugged in: {string.Join(", ", missing)}." : "") +
+                  (ignored.why == null ? "" : $" {ignored.why} Click {ignored.d.Info.DeviceType} ▾ on its card to change it.") +
+                  (backup.Length > 0 ? $" Your previous bindings are saved as {backup}." : ""), ignored.why != null);
     }
 
     void BuildRestoreMenu(ContextMenuStrip m)
@@ -1183,7 +1214,7 @@ sealed class MainForm : Form, IControlsHost
     void Install()
     {
         if (_adapter.ReadOnlyReason is { } readOnly) { SetStatus(readOnly, true); return; }
-        if (_profile.Bindings.Count == 0) { SetStatus("Nothing to install yet. Detect some bindings or load a preset.", true); return; }
+        if (_profile.Bindings.Count == 0) { SetStatus("Nothing to install yet. Detect some bindings or load a setup.", true); return; }
         if (GameRunning &&
             MessageBox.Show(this, $"{_adapter.Name} is running.\n\nIt rewrites {Path.GetFileName(_adapter.ConfigPath)} when it exits, from the copy it loaded at startup, " +
                                   "so anything written now is undone when you quit. Close the game first.\n\nWrite anyway?",

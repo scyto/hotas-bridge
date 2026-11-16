@@ -72,8 +72,8 @@ public static class ControlLayouts
                 S("B19", "Forward end stop"), S("B20", "Back end stop")),
             new ControlGroup("Right lever", S("Y", "Lever (axis)"), S("B37", "Top zone"), S("B38", "Middle zone (centre detent)"), S("B39", "Bottom zone"),
                 S("B21", "Forward end stop"), S("B22", "Back end stop")),
-            // under the thumb: the mini-stick, the thumb wheel around it (Rz), hat 1 and buttons 2-4 (user-confirmed)
-            new ControlGroup("Thumb", S("Rx", "Mini-stick forward / back"), S("Ry", "Mini-stick left / right"), S("B1", "Mini-stick click"),
+            // under the thumb: the thumbstick (Hangar's TDC), the thumb wheel around it (Rz), hat 1 and buttons 2-4 (user-confirmed)
+            new ControlGroup("Thumb", S("Rx", "Thumbstick left / right"), S("Ry", "Thumbstick up / down"), S("B1", "Thumbstick click"),
                 S("Rz", "Thumb wheel (axis)"),
                 S("H1U", "Hat 1 up"), S("H1R", "Hat 1 right"), S("H1D", "Hat 1 down"), S("H1L", "Hat 1 left"),
                 S("B2", "Button 2"), S("B3", "Button 3"), S("B4", "Button 4")),
