@@ -162,6 +162,7 @@ sealed class ControlsView : Panel
     }
 
     static bool Same(InputRef a, InputRef b) => a.Kind == b.Kind && a.Index == b.Index && (a.Kind != InputKind.Pov || a.Direction == b.Direction);
+    static bool IsHalf(InputRef i) => i.Kind == InputKind.Axis && i.Direction is '+' or '-';
 
     /// <summary>Works out each control's current binding(s), and the unbound actions, and repaints.</summary>
     void RefreshValues()
@@ -170,7 +171,10 @@ sealed class ControlsView : Panel
         foreach (var row in _rows)
         {
             var product = row.Dev.Info.ProductGuid;
-            var onThis = _actions.Where(a => _host.BindingFor(a) is { Raw: null, Input: { } bi } b && !b.IsHatAxisFor(a) && b.DeviceProduct == product && Same(bi, row.Input)).ToList();
+            var onThis = _actions.Where(a => _host.BindingFor(a) is { Raw: null, Input: { } bi } b && !b.IsHatAxisFor(a) && !IsHalf(bi) && b.DeviceProduct == product && Same(bi, row.Input)).ToList();
+            // half an axis (games that bind halves: Squadrons' Pitch Up on Y+), shown read-only on that axis
+            var halves = row.Input.Kind != InputKind.Axis ? new List<GameAction>() : _actions.Where(a => _host.BindingFor(a) is { Raw: null, Input: { } hi } b
+                && IsHalf(hi) && b.DeviceProduct == product && hi.Index == row.Input.Index).ToList();
             // a hat used as an axis uses both of its directions on this hat (up/down or left/right): shown read-only on both
             var hatAxes = row.Input.Kind != InputKind.Pov ? new List<GameAction>() : _actions.Where(a => _host.BindingFor(a) is { } b && b.IsHatAxisFor(a)
                 && b.DeviceProduct == product && b.Input!.Index == row.Input.Index
@@ -179,7 +183,7 @@ sealed class ControlsView : Panel
             var token = _host.Syntax(row.Input);
             var inText = token == null ? new List<GameAction>() : _actions.Where(a => _host.BindingFor(a) is { Raw: { } raw } b && b.DeviceProduct == product
                 && System.Text.RegularExpressions.Regex.IsMatch(raw, $@"(?<![A-Za-z0-9_]){System.Text.RegularExpressions.Regex.Escape(token)}(?![0-9])")).ToList();
-            inText.AddRange(hatAxes);
+            inText.AddRange(hatAxes); inText.AddRange(halves);
             bool readOnly = _locked != null || inText.Count > 0 || onThis.Count > 1;
             row.Current = readOnly ? null : onThis.FirstOrDefault();
             row.ReadOnlyText = !readOnly ? null : onThis.Count + inText.Count == 0 ? "—" : string.Join(" + ", onThis.Concat(inText).Select(a => a.Description).Distinct());
@@ -344,7 +348,7 @@ sealed class ControlsView : Panel
         if (otherRow) _tip.SetToolTip(_canvas, _hot == null ? null : TipFor(_hot));
     }
 
-    string? TipFor(Row r) => r.ReadOnlyText is not { } t ? null : _locked ?? $"{t}: a typed binding, a hat used as an axis, or several actions use this control. Edit it in the grid.";
+    string? TipFor(Row r) => r.ReadOnlyText is not { } t ? null : _locked ?? $"{t}: a typed binding, a hat used as an axis, half an axis, or several actions use this control. Edit it in the grid.";
 
     void Press((Row? row, Part part) h)
     {

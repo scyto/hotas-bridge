@@ -475,8 +475,11 @@ sealed class MainForm : Form, IControlsHost
         _baseline = new();
         if (_di != null) foreach (var d in _di.Devices) _baseline[d.Info.InstanceGuid] = Snap(d.State);
         var a = ActionFor(key);
+        bool halves = _adapter.BindsAxisHalves;
         var what = AppHandled(a) ? "press a button" :
-                   a.Kind == ActionKind.Button ? "press a button or push a hat" : (a.Gesture ?? "move the axis you want") + ", or push a hat";
+                   halves && a.Pair != null ? "move an axis the way that should do this, or push a hat (the other direction goes on its partner row)" :
+                   a.Kind == ActionKind.Button ? (halves ? "press a button, push a hat or move an axis" : "press a button or push a hat")
+                   : (a.Gesture ?? "move the axis you want") + ", or push a hat";
         SetStatus($"Listening for {key}: {what}. Click Press… or Esc to cancel.");
     }
 
@@ -503,6 +506,21 @@ sealed class MainForm : Form, IControlsHost
             var s = d.State;
             // until the device has reported, its held switches read up and would look like presses (DeviceState.Ready)
             if (!s.Ready || !_baseline.TryGetValue(d.Info.InstanceGuid, out var b)) { _baseline[d.Info.InstanceGuid] = Snap(s); continue; }
+            bool halves = _adapter.BindsAxisHalves && !AppHandled(action); // the game binds halves of axes (Squadrons)
+            if (halves && action.Pair != null)
+            {
+                // half of an axis action (Pitch Up): the half of the axis that moved, or a hat direction; the other row gets the
+                // opposite half. Axes and hats only, as on an axis row: a throttle presses detent buttons as its lever moves.
+                for (int i = 0; i < 8; i++)
+                    if (s.AxisPresent[i] && Math.Abs(s.Axes[i] - b.axes[i]) > 0.5f)
+                    { if (BindHalf(d, action, new InputRef(InputKind.Axis, i, s.Axes[i] > b.axes[i] ? '+' : '-'))) return; b.axes[i] = s.Axes[i]; }
+                for (int h = 0; h < s.PovCount; h++)
+                {
+                    char dir = DirectInputService.PovDir(s.Pov[h]);
+                    if (dir != '\0' && b.pov[h] < 0) { if (BindHalf(d, action, new InputRef(InputKind.Pov, h, dir))) return; b.pov[h] = s.Pov[h]; }
+                }
+                continue;
+            }
             if (action.Kind == ActionKind.Axis)
             {
                 // axes only: a throttle presses detent buttons as its lever moves, which must not win
@@ -529,7 +547,27 @@ sealed class MainForm : Form, IControlsHost
                 char dir = DirectInputService.PovDir(s.Pov[h]);
                 if (dir != '\0' && s.Pov[h] != b.pov[h] && Bind(d, new InputRef(InputKind.Pov, h, dir))) return;
             }
+            if (halves) // a button action on half an axis (Squadrons' Focus Shields on the thumbstick)
+                for (int i = 0; i < 8; i++)
+                    if (s.AxisPresent[i] && Math.Abs(s.Axes[i] - b.axes[i]) > 0.5f)
+                    { if (Bind(d, new InputRef(InputKind.Axis, i, s.Axes[i] > b.axes[i] ? '+' : '-'))) return; b.axes[i] = s.Axes[i]; }
         }
+    }
+
+    /// <summary>Binds one half of an axis action (Squadrons' Pitch Up) and gives the other half's row the opposite half of the
+    /// same control, unless that row is already on a different control (one the user chose).</summary>
+    bool BindHalf(LiveDevice d, GameAction action, InputRef input)
+    {
+        if (!Bind(d, input)) return false;
+        var partner = ActionFor(action.Pair!);
+        var opposite = input with { Direction = InputRef.OppositeDir(input.Direction) };
+        if (_profile.Bindings.TryGetValue(partner.Key, out var cur) &&
+            !(cur.DeviceProduct == d.Info.ProductGuid && cur.Raw == null && cur.Input is { } ci && ci.Kind == input.Kind && ci.Index == input.Index))
+            return true; // the other half is on something else: leave it
+        PutBinding(partner.Key, new Binding { DeviceProduct = d.Info.ProductGuid, DeviceName = d.Info.ProductName, DeviceType = d.Info.DeviceType, Input = opposite });
+        SaveProfile(); RefreshGrid();
+        SetStatus($"{action.Description} = {_adapter.Format(action, input)} and {partner.Description} = {_adapter.Format(partner, opposite)} on {d.Info.ProductName}.");
+        return true;
     }
 
     /// <summary>Which hat direction reads as positive for an axis action, as Detect writes it: up (or right), unless the game
@@ -998,7 +1036,9 @@ sealed class MainForm : Form, IControlsHost
         if (_adapter.ReadOnlyReason != null) { _profile = new GameProfile { GameId = _adapter.Id }; problem = LoadFromFile(); } // the grid shows the game's file
         else
         {
+            bool fresh = !ProfileStore.Exists(_adapter.Id);
             _profile = ProfileStore.Load(_adapter.Id);
+            if (fresh) problem = ImportFromFile(); // first time with this game: start from what its file has, not from nothing
             if (BindingUpgrade.Apply(_adapter, _profile)) SaveProfile(); // hats as axes used to be stored as AC7 text
         }
         SyncBindingTypes(); // older profiles have no device type, and a device's type can be changed
@@ -1006,7 +1046,28 @@ sealed class MainForm : Form, IControlsHost
         RebuildTabs(); RefreshGrid(); RebuildDevices(); UpdateSync();
         if (problem != null) SetStatus(problem, true);
         else if (_adapter.ReadOnlyReason != null) SetStatus($"{_adapter.Name}: showing the {_profile.Bindings.Count} joystick bindings in its file (read-only for now).");
+        else if (_imported) SetStatus($"{_adapter.Name}: first time here, so the grid starts from the {_profile.Bindings.Count} bindings in {Path.GetFileName(_adapter.ConfigPath)}.");
         else SetStatus($"{_adapter.Name}: {_profile.Bindings.Count} bindings loaded.");
+        _imported = false;
+    }
+
+    bool _imported; // LoadGame: the profile was just imported from the game's file
+
+    /// <summary>A game's first load: the bindings its file has now become the profile (so Install doesn't start by wiping them).
+    /// Returns why it couldn't, or null.</summary>
+    string? ImportFromFile()
+    {
+        if (!File.Exists(_adapter.ConfigPath)) return null;
+        try
+        {
+            var read = _adapter.ReadBindings(_adapter.ConfigPath);
+            FillDevices(read);
+            _profile.Bindings = read;
+            SaveProfile();
+            _imported = true;
+            return null;
+        }
+        catch (Exception ex) { return $"Couldn't read the bindings in {Path.GetFileName(_adapter.ConfigPath)}: {ex.Message}"; }
     }
 
     DateTime _fileStamp; // the game's file when it was last read (read-only games)
@@ -1067,15 +1128,17 @@ sealed class MainForm : Form, IControlsHost
             var item = new ToolStripMenuItem(p.Name + (connected == null ? "  (device not connected)" : ""));
             item.Click += (_, _) =>
             {
-                foreach (var (k, v) in p.Map)
-                    _profile.Bindings[k] = new Binding { DeviceProduct = p.DeviceProduct, DeviceName = connected?.Info.ProductName ?? p.DeviceName, DeviceType = connected?.Info.DeviceType, Input = v };
+                _listenKey = null;
+                var (set, removed, kept) = Presets.Apply(p, _profile, GridActions, connected?.Info.ProductName ?? p.DeviceName, connected?.Info.DeviceType);
                 foreach (var (k, v) in p.System ?? new Dictionary<string, InputRef>())
                     _settings.System[k] = new SystemBinding { DeviceProduct = p.DeviceProduct, DeviceName = connected?.Info.ProductName ?? p.DeviceName, Button = v.Index };
                 if (p.System is { Count: > 0 }) SaveSettings();
                 SaveProfile(); RefreshGrid();
                 var devWhy = connected == null ? null : _adapter.UnsupportedDevice(connected.Info.DeviceType, connected.Info.ProductName);
                 var sys = p.System is { Count: > 0 } ? ", " + string.Join(", ", p.System.Select(s => $"{s.Key} on Button{s.Value.Index + 1}")) : "";
-                SetStatus($"Loaded preset '{p.Name}' ({p.Map.Count} bindings{sys})." +
+                SetStatus($"Loaded preset '{p.Name}' ({set} bindings{sys}" +
+                          (removed > 0 ? $"; {removed} other binding{(removed == 1 ? "" : "s")} on {p.DeviceName} removed" : "") +
+                          (kept > 0 ? $"; {kept} left on the device that already has {(kept == 1 ? "it" : "them")}" : "") + ")." +
                           (devWhy == null ? "" : $" {devWhy} Click {connected!.Info.DeviceType} ▾ on its card to change it."), devWhy != null);
             };
             m.Items.Add(item);
@@ -1133,7 +1196,11 @@ sealed class MainForm : Form, IControlsHost
             var fileBindings = file.Bindings.Where(kv => _adapter.Actions.Any(x => x.Key == kv.Key)).Select(kv => kv.Value).ToList();
             var ignored = fileBindings.Where(b => _adapter.UnsupportedDevice(b.DeviceType, b.DeviceName) != null).ToList();
             var skipped = ignored.Count == 0 ? "" : $"Skipped {ignored.Count} on {string.Join(", ", ignored.Select(b => b.DeviceName).Distinct())} (the game ignores it). ";
-            SetStatus($"Installed {fileBindings.Count - ignored.Count} bindings. " + skipped + (backup.Length > 0 ? $"Backup: {Path.GetFileName(backup)}" : "(no previous file to back up)"));
+            // a device that isn't plugged in when the game starts isn't read (Squadrons also gives its Flight Stick number away)
+            var unplugged = fileBindings.Where(b => _di?.Devices.Any(d => d.Info.ProductGuid == b.DeviceProduct) != true).Select(b => b.DeviceName).Distinct().ToList();
+            var plugIn = unplugged.Count == 0 ? "" : $" Not plugged in: {string.Join(", ", unplugged)}. Plug {(unplugged.Count == 1 ? "it" : "them")} in before you start {GameShortName}.";
+            SetStatus($"Installed {fileBindings.Count - ignored.Count} bindings. " + skipped + (backup.Length > 0 ? $"Backup: {Path.GetFileName(backup)}." : "(no previous file to back up)") + plugIn,
+                      unplugged.Count > 0);
             RebuildDevices(); UpdateSync();
         }
         catch (Exception ex) { SetStatus("Install failed: " + ex.Message, true); }

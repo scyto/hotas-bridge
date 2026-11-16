@@ -26,6 +26,9 @@ public interface IGameAdapter
     IReadOnlyList<string> Sections => Array.Empty<string>();
     /// <summary>How many buttons the game reads (AC7: 32). Device cards grey out the rest; system buttons can still use them.</summary>
     int MaxButtons { get; }
+    /// <summary>Whether the game binds halves of axes (InputRef Direction '+' / '-'): then Detect on a button row also takes an
+    /// axis movement, and rows with GameAction.Pair are bound a half at a time (Squadrons).</summary>
+    bool BindsAxisHalves => false;
 
     /// <summary>How the game shows and writes <paramref name="input"/> bound to <paramref name="action"/> (the grid's Binding
     /// column, status lines), or null if the game can't use it (e.g. Button 33 in AC7). For an axis action, a hat
