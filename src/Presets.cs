@@ -85,17 +85,19 @@ public static class Presets
         ["Flight_Pitch"] = A(1, true), ["Flight_Roll"] = A(0),
         ["Flight_Gun"] = B(28),               // trigger stage 1
         ["Flight_Missile"] = B(1),            // FIRE touch pad push
-        ["Flight_Weapon"] = B(9),             // shaft button
+        // Weapon, radar, flares and the radio hat are where the user flies them (their Input.ini, 2026-11-14; the radio moved
+        // to hat 2 after a multiplayer match)
+        ["Flight_Weapon"] = B(5),             // D-pad east
         ["Flight_Target"] = B(3),             // thumbstick click
-        ["Flight_Flare"] = B(8),              // thumb wheel click
+        ["Flight_Flare"] = B(9),              // shaft button
         ["Flight_AccelerationDeceleration"] = B(10), // pinkie lever
-        // 31 and 32 sit either side of START (22) like an Xbox pad's View and Menu either side of Guide, and do what those do
-        // in AC7: View = radar map, Menu = pause. AC7 can't read Guide or Share, so those are system buttons: Guide on 22,
-        // Share on 33 (AC7 can't read 33 either, but HOTAS Bridge can).
-        ["Flight_Radar"] = B(31), ["Flight_AutoPilot"] = B(7),
+        ["Flight_Radar"] = B(6),              // D-pad south
+        ["Flight_AutoPilot"] = B(7),          // D-pad west
+        // 32 sits right of START (22) like an Xbox pad's Menu right of Guide, and pauses as Menu does in AC7. AC7 can't read
+        // Guide or Share, so those are system buttons: Guide on 22, Share on 33 (AC7 can't read 33 either, but HOTAS Bridge can).
         ["Flight_Pause"] = B(32),
-        ["Flight_HatSwitchUp"] = H(1, 'U'), ["Flight_HatSwitchDown"] = H(1, 'D'),
-        ["Flight_HatSwitchLeft"] = H(1, 'L'), ["Flight_HatSwitchRight"] = H(1, 'R'),
+        ["Flight_HatSwitchUp"] = H(2, 'U'), ["Flight_HatSwitchDown"] = H(2, 'D'),
+        ["Flight_HatSwitchLeft"] = H(2, 'L'), ["Flight_HatSwitchRight"] = H(2, 'R'),
         ["UI_A"] = B(28), ["UI_B"] = B(10), ["UI_X"] = B(7), ["UI_Y"] = B(4),
         ["UI_LB"] = B(29), ["UI_RB"] = B(30), // thumb wheel (set to buttons mode in Hangar)
         ["UI_Menu"] = B(32),                  // AC7 has no menu action for View
