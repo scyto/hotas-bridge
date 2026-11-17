@@ -9,6 +9,9 @@ namespace HotasBridge;
 /// closes, but Raw Input (with RIDEV_INPUTSINK) keeps arriving (measured on the Flightdeck Stick). So system buttons and
 /// Game Bar navigation read this while the Game Bar is open. Buttons are numbered like DirectInput (HID usage 1 =
 /// button 0) and hats in report order, keyed by the DirectInput product GUID.
+/// It's registered only while the Game Bar is open (<see cref="Listen"/>): with a background registration for joysticks
+/// and gamepads, Windows counts every HID report from them as the user using the PC, and the VelocityOne Rudder sends ~250
+/// identical reports a second untouched, so the display never turned off and the PC never idle-slept (measured 2026-11-15).
 /// </summary>
 sealed class RawHidInput : NativeWindow, IDisposable
 {
@@ -16,8 +19,9 @@ sealed class RawHidInput : NativeWindow, IDisposable
     {
         public readonly bool[] Buttons = new bool[128];
         public readonly int[] Pov = { -1, -1, -1, -1 };
-        /// <summary>Buttons that went down since <see cref="ClearPressed"/> (every report counts, so short taps do too). Not
-        /// from the device's first report, which only sets the starting state (see DeviceState.Ready).</summary>
+        /// <summary>Buttons that went down since <see cref="ClearPressed"/> (every report counts, so short taps do too),
+        /// compared with the starting state <see cref="Listen"/> was given. For a device without one, the first report
+        /// after registering only sets the starting state (see DeviceState.Ready).</summary>
         public readonly List<int> Pressed = new();
         public bool Reported;
     }
@@ -38,21 +42,44 @@ sealed class RawHidInput : NativeWindow, IDisposable
 
     readonly Dictionary<IntPtr, Device?> _devices = new(); // raw device handle → parsed device (null: not one we read)
     readonly Dictionary<Guid, RawState> _states = new();
+    IReadOnlyDictionary<Guid, bool[]>? _start; // buttons as DirectInput last saw them, by product, while listening
 
-    public RawHidInput()
+    public RawHidInput() => CreateHandle(new CreateParams { Parent = new IntPtr(-3) }); // HWND_MESSAGE: never shown
+
+    /// <summary>Registered for joystick and gamepad reports now.</summary>
+    public bool Listening { get; private set; }
+    /// <summary>Why the last <see cref="Listen"/> failed, or null.</summary>
+    public string? Problem { get; private set; }
+
+    /// <summary>Registers for joystick and gamepad reports (true) or removes the registration (false); call it on the thread
+    /// that created this. Only while the Game Bar is open: see the class summary. Each registration starts from
+    /// <paramref name="start"/>, the buttons DirectInput last saw (held switches included, so they aren't new presses), and
+    /// a device not in it gets its starting state from its first report. False if Windows refused (see Problem).</summary>
+    public bool Listen(bool on, IReadOnlyDictionary<Guid, bool[]>? start = null)
     {
-        CreateHandle(new CreateParams { Parent = new IntPtr(-3) }); // HWND_MESSAGE: never shown
+        if (on == Listening) return true;
+        var flags = on ? RIDEV_INPUTSINK : RIDEV_REMOVE;
+        var target = on ? Handle : IntPtr.Zero; // RIDEV_REMOVE takes no target window
         var r = new[]
         {
-            new RAWINPUTDEVICE { UsagePage = 1, Usage = 4, Flags = RIDEV_INPUTSINK, Target = Handle }, // joysticks
-            new RAWINPUTDEVICE { UsagePage = 1, Usage = 5, Flags = RIDEV_INPUTSINK, Target = Handle }, // gamepads
+            new RAWINPUTDEVICE { UsagePage = 1, Usage = 4, Flags = flags, Target = target }, // joysticks
+            new RAWINPUTDEVICE { UsagePage = 1, Usage = 5, Flags = flags, Target = target }, // gamepads
         };
-        RegisterRawInputDevices(r, r.Length, Marshal.SizeOf<RAWINPUTDEVICE>());
+        if (!RegisterRawInputDevices(r, r.Length, Marshal.SizeOf<RAWINPUTDEVICE>()))
+        {
+            Problem = $"Windows refused the raw input registration (error {Marshal.GetLastWin32Error()}).";
+            return false;
+        }
+        Listening = on; Problem = null;
+        _states.Clear(); // a fresh start each time: nothing arrives while not registered
+        _start = on ? start : null;
+        return true;
     }
 
     protected override void WndProc(ref Message m)
     {
-        if (m.Msg == WM_INPUT) { try { OnInput(m.LParam); } catch { /* a bad report must not take the app down */ } }
+        // reports still queued when the registration was removed are left alone
+        if (m.Msg == WM_INPUT && Listening) { try { OnInput(m.LParam); } catch { /* a bad report must not take the app down */ } }
         base.WndProc(ref m);
     }
 
@@ -75,7 +102,12 @@ sealed class RawHidInput : NativeWindow, IDisposable
 
     void Parse(Device dev, IntPtr report, int length)
     {
-        if (!_states.TryGetValue(dev.Product, out var st)) _states[dev.Product] = st = new RawState();
+        if (!_states.TryGetValue(dev.Product, out var st))
+        {
+            _states[dev.Product] = st = new RawState();
+            if (_start != null && _start.TryGetValue(dev.Product, out var known))
+            { Array.Copy(known, st.Buttons, Math.Min(known.Length, st.Buttons.Length)); st.Reported = true; }
+        }
         var data = new byte[dev.MaxData * 8]; // HIDP_DATA: USHORT DataIndex, USHORT Reserved, ULONG RawValue / BOOLEAN On
         uint n = (uint)dev.MaxData;
         if (HidP_GetData(HidP_Input, data, ref n, dev.Preparsed, report, (uint)length) != HIDP_STATUS_SUCCESS) return;
@@ -165,12 +197,13 @@ sealed class RawHidInput : NativeWindow, IDisposable
 
     public void Dispose()
     {
+        Listen(false);
         foreach (var d in _devices.Values) if (d != null) Marshal.FreeHGlobal(d.Preparsed);
         _devices.Clear();
         DestroyHandle();
     }
 
-    const int WM_INPUT = 0x00FF, RID_INPUT = 0x10000003, RIM_TYPEHID = 2, RIDEV_INPUTSINK = 0x100;
+    const int WM_INPUT = 0x00FF, RID_INPUT = 0x10000003, RIM_TYPEHID = 2, RIDEV_INPUTSINK = 0x100, RIDEV_REMOVE = 0x1;
     const uint RIDI_DEVICENAME = 0x20000007, RIDI_PREPARSEDDATA = 0x20000005;
     const int HidP_Input = 0, HIDP_STATUS_SUCCESS = 0x00110000;
 

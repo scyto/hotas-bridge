@@ -97,7 +97,7 @@ sealed class MainForm : Form, IControlsHost
             ApplyGridMetrics();
             try { _di = new DirectInputService(Handle); }
             catch (Exception ex) { SetStatus("DirectInput failed to start: " + ex.Message, true); }
-            try { _raw = new RawHidInput(); } catch { } // only needed while the Game Bar is open
+            try { _raw = new RawHidInput(); } catch { } // registers only while the Game Bar is open (UpdateGameBarState)
             RebuildDevices(); LoadGame();
             VJoyOutput.CentreIfFree(); // a previous run may have died with a shaped axis off-centre
             _timer.Tick += (_, _) => Tick();
@@ -922,7 +922,8 @@ sealed class MainForm : Form, IControlsHost
 
     /// <summary>Whether the Game Bar is open. While it is, Windows pauses DirectInput for other apps and replays the
     /// queued presses when it closes (measured), so system buttons and navigation read Raw Input instead, and DirectInput
-    /// presses are ignored for a moment after it closes so the replay can't reopen it.</summary>
+    /// presses are ignored for a moment after it closes so the replay can't reopen it. Raw Input is registered only while
+    /// it's open: registered, Windows counts every controller report as the user using the PC (see RawHidInput).</summary>
     void UpdateGameBarState()
     {
         long now = Environment.TickCount64;
@@ -934,9 +935,17 @@ sealed class MainForm : Form, IControlsHost
         if (open == _gameBarOpen) return;
         if (!open) _ignoreDirectInputUntil = now + ReplayGuardMs;
         _gameBarOpen = open;
-        SetStatus(open ? "Game Bar open: your menu buttons drive it (left/right, up/down, A selects, B backs out; Guide closes it)." : "Game Bar closed.");
+        if (_raw != null && !_raw.Listen(open, open ? DirectInputButtons() : null))
+            SetStatus((open ? "Game Bar open, but your stick can't drive it: " : "Game Bar closed. ") + _raw.Problem, true);
+        else SetStatus(open ? "Game Bar open: your menu buttons drive it (left/right, up/down, A selects, B backs out; Guide closes it)." : "Game Bar closed.");
     }
     const long ReplayGuardMs = 1500;
+
+    /// <summary>Each device's buttons as DirectInput last saw them, by product, for devices that have reported (so held
+    /// switches read as held): Raw Input's starting state, so its first report doesn't show them as presses.</summary>
+    Dictionary<Guid, bool[]> DirectInputButtons() => (_di?.Devices ?? Enumerable.Empty<LiveDevice>())
+        .Where(d => d.State.Ready && !d.Info.IsVJoy).GroupBy(d => d.Info.ProductGuid)
+        .ToDictionary(g => g.Key, g => (bool[])g.First().State.Buttons.Clone());
     long _ignoreDirectInputUntil;
 
     void DriveGameBar()
